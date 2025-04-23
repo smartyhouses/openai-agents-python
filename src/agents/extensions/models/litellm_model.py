@@ -26,12 +26,13 @@ from openai.types.chat.chat_completion_message import (
     ChatCompletionMessage,
 )
 from openai.types.chat.chat_completion_message_tool_call import Function
-from openai.types.responses import Response
+from openai.types.responses import Response, ResponseReasoningItem
+from openai.types.responses.response_reasoning_item import Summary
 
 from ... import _debug
 from ...agent_output import AgentOutputSchemaBase
 from ...handoffs import Handoff
-from ...items import ModelResponse, TResponseInputItem, TResponseStreamEvent
+from ...items import ModelResponse, ReasoningItem, TResponseInputItem, TResponseStreamEvent
 from ...logger import logger
 from ...model_settings import ModelSettings
 from ...models.chatcmpl_converter import Converter
@@ -123,9 +124,20 @@ class LitellmModel(Model):
                 "output_tokens": usage.output_tokens,
             }
 
+            message = response.choices[0].message
+
             items = Converter.message_to_output_items(
-                LitellmConverter.convert_message_to_openai(response.choices[0].message)
+                LitellmConverter.convert_message_to_openai(message)
             )
+
+            if hasattr(message, "reasoning_content") and message.reasoning_content:
+                items.append(
+                    ResponseReasoningItem(
+                        id=FAKE_RESPONSES_ID,
+                        summary=[Summary(text=message.reasoning_content, type="summary_text")],
+                        type="reasoning",
+                    )
+                )
 
             return ModelResponse(
                 output=items,
