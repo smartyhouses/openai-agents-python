@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import dataclasses
 import json
 import time
 from collections.abc import AsyncIterator
@@ -26,7 +25,8 @@ from openai.types.chat.chat_completion_message import (
     ChatCompletionMessage,
 )
 from openai.types.chat.chat_completion_message_tool_call import Function
-from openai.types.responses import Response
+from openai.types.responses import Response, ResponseReasoningItem
+from openai.types.responses.response_reasoning_item import Summary
 
 from ... import _debug
 from ...agent_output import AgentOutputSchemaBase
@@ -75,7 +75,7 @@ class LitellmModel(Model):
     ) -> ModelResponse:
         with generation_span(
             model=str(self.model),
-            model_config=dataclasses.asdict(model_settings)
+            model_config=model_settings.to_json_dict()
             | {"base_url": str(self.base_url or ""), "model_impl": "litellm"},
             disabled=tracing.is_disabled(),
         ) as span_generation:
@@ -123,9 +123,20 @@ class LitellmModel(Model):
                 "output_tokens": usage.output_tokens,
             }
 
+            message = response.choices[0].message
+
             items = Converter.message_to_output_items(
-                LitellmConverter.convert_message_to_openai(response.choices[0].message)
+                LitellmConverter.convert_message_to_openai(message)
             )
+
+            if hasattr(message, "reasoning_content") and message.reasoning_content:
+                items.append(
+                    ResponseReasoningItem(
+                        id=FAKE_RESPONSES_ID,
+                        summary=[Summary(text=message.reasoning_content, type="summary_text")],
+                        type="reasoning",
+                    )
+                )
 
             return ModelResponse(
                 output=items,
@@ -147,7 +158,7 @@ class LitellmModel(Model):
     ) -> AsyncIterator[TResponseStreamEvent]:
         with generation_span(
             model=str(self.model),
-            model_config=dataclasses.asdict(model_settings)
+            model_config=model_settings.to_json_dict()
             | {"base_url": str(self.base_url or ""), "model_impl": "litellm"},
             disabled=tracing.is_disabled(),
         ) as span_generation:
