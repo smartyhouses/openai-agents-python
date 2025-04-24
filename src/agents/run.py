@@ -701,6 +701,7 @@ class Runner:
                     usage=usage,
                     response_id=event.response.id,
                 )
+                context_wrapper.usage.add(usage)
 
             streamed_result._event_queue.put_nowait(RawResponsesStreamEvent(data=event))
 
