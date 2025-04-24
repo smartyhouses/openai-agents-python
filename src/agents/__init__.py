@@ -18,7 +18,10 @@ from .exceptions import (
 )
 from .guardrail import (
     GuardrailFunctionOutput,
+    InputGuardailInputs,
     InputGuardrail,
+    InputGuardrailFunction,
+    InputGuardrailFunctionLegacy,
     InputGuardrailResult,
     OutputGuardrail,
     OutputGuardrailResult,
@@ -174,6 +177,9 @@ __all__ = [
     "OutputGuardrail",
     "OutputGuardrailResult",
     "GuardrailFunctionOutput",
+    "InputGuardailInputs",
+    "InputGuardrailFunction",
+    "InputGuardrailFunctionLegacy",
     "input_guardrail",
     "output_guardrail",
     "handoff",

@@ -688,10 +688,11 @@ class RunImpl:
         agent: Agent[Any],
         guardrail: InputGuardrail[TContext],
         input: str | list[TResponseInputItem],
+        previous_response_id: str | None,
         context: RunContextWrapper[TContext],
     ) -> InputGuardrailResult:
         with guardrail_span(guardrail.get_name()) as span_guardrail:
-            result = await guardrail.run(agent, input, context)
+            result = await guardrail.run(agent, input, context, previous_response_id)
             span_guardrail.span_data.triggered = result.output.tripwire_triggered
             return result
 
