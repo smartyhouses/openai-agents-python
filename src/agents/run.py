@@ -271,6 +271,7 @@ class Runner:
                             _last_agent=current_agent,
                             input_guardrail_results=input_guardrail_results,
                             output_guardrail_results=output_guardrail_results,
+                            context_wrapper=context_wrapper,
                         )
                     elif isinstance(turn_result.next_step, NextStepHandoff):
                         current_agent = cast(Agent[TContext], turn_result.next_step.new_agent)
@@ -424,6 +425,7 @@ class Runner:
             output_guardrail_results=[],
             _current_agent_output_schema=output_schema,
             trace=new_trace,
+            context_wrapper=context_wrapper,
         )
 
         # Kick off the actual agent loop in the background and return the streamed result object.
