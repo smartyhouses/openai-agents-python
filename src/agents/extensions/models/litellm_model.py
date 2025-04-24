@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import dataclasses
 import json
 import time
 from collections.abc import AsyncIterator
@@ -32,7 +31,7 @@ from openai.types.responses.response_reasoning_item import Summary
 from ... import _debug
 from ...agent_output import AgentOutputSchemaBase
 from ...handoffs import Handoff
-from ...items import ModelResponse, ReasoningItem, TResponseInputItem, TResponseStreamEvent
+from ...items import ModelResponse, TResponseInputItem, TResponseStreamEvent
 from ...logger import logger
 from ...model_settings import ModelSettings
 from ...models.chatcmpl_converter import Converter
@@ -76,7 +75,7 @@ class LitellmModel(Model):
     ) -> ModelResponse:
         with generation_span(
             model=str(self.model),
-            model_config=dataclasses.asdict(model_settings)
+            model_config=model_settings.to_json_dict()
             | {"base_url": str(self.base_url or ""), "model_impl": "litellm"},
             disabled=tracing.is_disabled(),
         ) as span_generation:
@@ -159,7 +158,7 @@ class LitellmModel(Model):
     ) -> AsyncIterator[TResponseStreamEvent]:
         with generation_span(
             model=str(self.model),
-            model_config=dataclasses.asdict(model_settings)
+            model_config=model_settings.to_json_dict()
             | {"base_url": str(self.base_url or ""), "model_impl": "litellm"},
             disabled=tracing.is_disabled(),
         ) as span_generation:
