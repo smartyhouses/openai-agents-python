@@ -221,6 +221,7 @@ class Runner:
                                 starting_agent.input_guardrails
                                 + (run_config.input_guardrails or []),
                                 copy.deepcopy(input),
+                                previous_response_id,
                                 context_wrapper,
                             ),
                             cls._run_single_turn(
@@ -446,6 +447,7 @@ class Runner:
         agent: Agent[Any],
         guardrails: list[InputGuardrail[TContext]],
         input: str | list[TResponseInputItem],
+        previous_response_id: str | None,
         context: RunContextWrapper[TContext],
         streamed_result: RunResultStreaming,
         parent_span: Span[Any],
@@ -455,7 +457,9 @@ class Runner:
         # We'll run the guardrails and push them onto the queue as they complete
         guardrail_tasks = [
             asyncio.create_task(
-                RunImpl.run_single_input_guardrail(agent, guardrail, input, context)
+                RunImpl.run_single_input_guardrail(
+                    agent, guardrail, input, previous_response_id, context
+                )
             )
             for guardrail in guardrails
         ]
@@ -551,6 +555,7 @@ class Runner:
                             starting_agent,
                             starting_agent.input_guardrails + (run_config.input_guardrails or []),
                             copy.deepcopy(ItemHelpers.input_to_new_input_list(starting_input)),
+                            previous_response_id,
                             context_wrapper,
                             streamed_result,
                             current_span,
@@ -825,6 +830,7 @@ class Runner:
         agent: Agent[Any],
         guardrails: list[InputGuardrail[TContext]],
         input: str | list[TResponseInputItem],
+        previous_response_id: str | None,
         context: RunContextWrapper[TContext],
     ) -> list[InputGuardrailResult]:
         if not guardrails:
@@ -832,7 +838,9 @@ class Runner:
 
         guardrail_tasks = [
             asyncio.create_task(
-                RunImpl.run_single_input_guardrail(agent, guardrail, input, context)
+                RunImpl.run_single_input_guardrail(
+                    agent, guardrail, input, previous_response_id, context
+                )
             )
             for guardrail in guardrails
         ]

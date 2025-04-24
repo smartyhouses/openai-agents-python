@@ -3,9 +3,9 @@ from __future__ import annotations
 import inspect
 from collections.abc import Awaitable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, Generic, Union, overload
+from typing import TYPE_CHECKING, Any, Callable, Generic, Union, cast, overload
 
-from typing_extensions import TypeVar
+from typing_extensions import TypeAlias, TypeVar
 
 from .exceptions import UserError
 from .items import TResponseInputItem
@@ -68,6 +68,31 @@ class OutputGuardrailResult:
     """The output of the guardrail function."""
 
 
+InputGuardrailFunctionLegacy: TypeAlias = Callable[
+    [RunContextWrapper[TContext], "Agent[Any]", Union[str, list[TResponseInputItem]]],
+    MaybeAwaitable[GuardrailFunctionOutput],
+]
+"""The legacy guardrail function signature, retained for backwards compatibility. Of the form:
+def my_guardrail(ctx, agent, input)
+"""
+
+
+@dataclass
+class InputGuardailInputs:
+    agent: Agent[Any]
+    input: str | list[TResponseInputItem]
+    previous_response_id: str | None
+
+
+InputGuardrailFunction: TypeAlias = Callable[
+    [RunContextWrapper[TContext], InputGuardailInputs],
+    MaybeAwaitable[GuardrailFunctionOutput],
+]
+"""The new guardrail function signature, of the form:
+def my_guardrail(ctx, inputs)
+"""
+
+
 @dataclass
 class InputGuardrail(Generic[TContext]):
     """Input guardrails are checks that run in parallel to the agent's execution.
@@ -82,10 +107,7 @@ class InputGuardrail(Generic[TContext]):
     execution will immediately stop and a `InputGuardrailTripwireTriggered` exception will be raised
     """
 
-    guardrail_function: Callable[
-        [RunContextWrapper[TContext], Agent[Any], str | list[TResponseInputItem]],
-        MaybeAwaitable[GuardrailFunctionOutput],
-    ]
+    guardrail_function: InputGuardrailFunction[TContext] | InputGuardrailFunctionLegacy[TContext]
     """A function that receives the agent input and the context, and returns a
      `GuardrailResult`. The result marks whether the tripwire was triggered, and can optionally
      include information about the guardrail's output.
@@ -107,11 +129,21 @@ class InputGuardrail(Generic[TContext]):
         agent: Agent[Any],
         input: str | list[TResponseInputItem],
         context: RunContextWrapper[TContext],
+        previous_response_id: str | None,
     ) -> InputGuardrailResult:
         if not callable(self.guardrail_function):
             raise UserError(f"Guardrail function must be callable, got {self.guardrail_function}")
 
-        output = self.guardrail_function(context, agent, input)
+        sig = inspect.signature(self.guardrail_function)
+        if len(sig.parameters) == 3:
+            # Legacy guardrail function
+            legacy_function = cast(InputGuardrailFunctionLegacy[TContext], self.guardrail_function)
+            output = legacy_function(context, agent, input)
+        else:
+            # New guardrail function
+            new_function = cast(InputGuardrailFunction[TContext], self.guardrail_function)
+            output = new_function(context, InputGuardailInputs(agent, input, previous_response_id))
+
         if inspect.isawaitable(output):
             return InputGuardrailResult(
                 guardrail=self,
@@ -182,13 +214,11 @@ class OutputGuardrail(Generic[TContext]):
 TContext_co = TypeVar("TContext_co", bound=Any, covariant=True)
 
 # For InputGuardrail
-_InputGuardrailFuncSync = Callable[
-    [RunContextWrapper[TContext_co], "Agent[Any]", Union[str, list[TResponseInputItem]]],
-    GuardrailFunctionOutput,
+_InputGuardrailFuncSync = Union[
+    InputGuardrailFunctionLegacy[TContext_co], InputGuardrailFunction[TContext_co]
 ]
-_InputGuardrailFuncAsync = Callable[
-    [RunContextWrapper[TContext_co], "Agent[Any]", Union[str, list[TResponseInputItem]]],
-    Awaitable[GuardrailFunctionOutput],
+_InputGuardrailFuncAsync = Union[
+    InputGuardrailFunctionLegacy[TContext_co], InputGuardrailFunction[TContext_co]
 ]
 
 
