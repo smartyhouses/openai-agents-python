@@ -1,8 +1,8 @@
-# Session Memory
+# Sessions
 
 The Agents SDK provides built-in session memory to automatically maintain conversation history across multiple agent runs, eliminating the need to manually handle `.to_input_list()` between turns.
 
-Session memory stores conversation history for a specific session, allowing agents to maintain context without requiring explicit manual memory management. This is particularly useful for building chat applications or multi-turn conversations where you want the agent to remember previous interactions.
+Sessions stores conversation history for a specific session, allowing agents to maintain context without requiring explicit manual memory management. This is particularly useful for building chat applications or multi-turn conversations where you want the agent to remember previous interactions.
 
 ## Quick start
 
@@ -57,7 +57,7 @@ This eliminates the need to manually call `.to_input_list()` and manage conversa
 
 ### Basic operations
 
-Session memory supports several operations for managing conversation history:
+Sessions supports several operations for managing conversation history:
 
 ```python
 from agents import SQLiteSession
@@ -266,7 +266,7 @@ async def main():
     # Create a session instance that will persist across runs
     session = SQLiteSession("conversation_123", "conversation_history.db")
 
-    print("=== Session Memory Example ===")
+    print("=== Sessions Example ===")
     print("The agent will remember previous messages automatically.\n")
 
     # First turn
@@ -304,7 +304,7 @@ async def main():
 
     print("=== Conversation Complete ===")
     print("Notice how the agent remembered the context from previous turns!")
-    print("Session memory automatically handles conversation history.")
+    print("Sessions automatically handles conversation history.")
 
 
 if __name__ == "__main__":
@@ -317,4 +317,3 @@ For detailed API documentation, see:
 
 -   [`Session`][agents.memory.Session] - Protocol interface
 -   [`SQLiteSession`][agents.memory.SQLiteSession] - SQLite implementation
--   [`RunConfig.session`][agents.run.RunConfig.session] - Run configuration

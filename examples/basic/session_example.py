@@ -20,7 +20,7 @@ async def main():
     session_id = "conversation_123"
     session = SQLiteSession(session_id)
 
-    print("=== Session Memory Example ===")
+    print("=== Session Example ===")
     print("The agent will remember previous messages automatically.\n")
 
     # First turn
@@ -54,7 +54,7 @@ async def main():
 
     print("=== Conversation Complete ===")
     print("Notice how the agent remembered the context from previous turns!")
-    print("Session memory automatically handles conversation history.")
+    print("Sessions automatically handles conversation history.")
 
 
 if __name__ == "__main__":
