@@ -57,13 +57,22 @@ class SQLiteSessionMemory(SessionMemory):
     For persistent storage, provide a file path.
     """
 
-    def __init__(self, db_path: str | Path = ":memory:"):
+    def __init__(
+        self,
+        db_path: str | Path = ":memory:",
+        sessions_table: str = "agent_sessions",
+        messages_table: str = "agent_messages",
+    ):
         """Initialize the SQLite session memory.
 
         Args:
             db_path: Path to the SQLite database file. Defaults to ':memory:' (in-memory database)
+            sessions_table: Name of the table to store session metadata. Defaults to 'agent_sessions'
+            messages_table: Name of the table to store message data. Defaults to 'agent_messages'
         """
         self.db_path = db_path
+        self.sessions_table = sessions_table
+        self.messages_table = messages_table
         self._local = threading.local()
         self._init_db()
 
@@ -81,8 +90,8 @@ class SQLiteSessionMemory(SessionMemory):
         """Initialize the database schema."""
         conn = self._get_connection()
         conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS sessions (
+            f"""
+            CREATE TABLE IF NOT EXISTS {self.sessions_table} (
                 session_id TEXT PRIMARY KEY,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -91,21 +100,21 @@ class SQLiteSessionMemory(SessionMemory):
         )
 
         conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS messages (
+            f"""
+            CREATE TABLE IF NOT EXISTS {self.messages_table} (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 session_id TEXT NOT NULL,
                 message_data TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (session_id) REFERENCES sessions (session_id) ON DELETE CASCADE
+                FOREIGN KEY (session_id) REFERENCES {self.sessions_table} (session_id) ON DELETE CASCADE
             )
         """
         )
 
         conn.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_messages_session_id 
-            ON messages (session_id, created_at)
+            f"""
+            CREATE INDEX IF NOT EXISTS idx_{self.messages_table}_session_id 
+            ON {self.messages_table} (session_id, created_at)
         """
         )
 
@@ -122,8 +131,8 @@ class SQLiteSessionMemory(SessionMemory):
         """
         conn = self._get_connection()
         cursor = conn.execute(
-            """
-            SELECT message_data FROM messages 
+            f"""
+            SELECT message_data FROM {self.messages_table} 
             WHERE session_id = ? 
             ORDER BY created_at ASC
         """,
@@ -157,8 +166,8 @@ class SQLiteSessionMemory(SessionMemory):
 
         # Ensure session exists
         conn.execute(
-            """
-            INSERT OR IGNORE INTO sessions (session_id) VALUES (?)
+            f"""
+            INSERT OR IGNORE INTO {self.sessions_table} (session_id) VALUES (?)
         """,
             (session_id,),
         )
@@ -166,16 +175,16 @@ class SQLiteSessionMemory(SessionMemory):
         # Add messages
         message_data = [(session_id, json.dumps(message)) for message in messages]
         conn.executemany(
-            """
-            INSERT INTO messages (session_id, message_data) VALUES (?, ?)
+            f"""
+            INSERT INTO {self.messages_table} (session_id, message_data) VALUES (?, ?)
         """,
             message_data,
         )
 
         # Update session timestamp
         conn.execute(
-            """
-            UPDATE sessions SET updated_at = CURRENT_TIMESTAMP WHERE session_id = ?
+            f"""
+            UPDATE {self.sessions_table} SET updated_at = CURRENT_TIMESTAMP WHERE session_id = ?
         """,
             (session_id,),
         )
@@ -189,8 +198,12 @@ class SQLiteSessionMemory(SessionMemory):
             session_id: Unique identifier for the conversation session
         """
         conn = self._get_connection()
-        conn.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
-        conn.execute("DELETE FROM sessions WHERE session_id = ?", (session_id,))
+        conn.execute(
+            f"DELETE FROM {self.messages_table} WHERE session_id = ?", (session_id,)
+        )
+        conn.execute(
+            f"DELETE FROM {self.sessions_table} WHERE session_id = ?", (session_id,)
+        )
         conn.commit()
 
     def close(self) -> None:
