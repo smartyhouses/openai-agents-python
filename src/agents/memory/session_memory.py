@@ -97,6 +97,12 @@ class SQLiteSessionMemory(SessionMemory):
             )
             self._shared_connection.execute("PRAGMA journal_mode=WAL")
             self._init_db_for_connection(self._shared_connection)
+        else:
+            # For file databases, initialize the schema once since it persists
+            init_conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
+            init_conn.execute("PRAGMA journal_mode=WAL")
+            self._init_db_for_connection(init_conn)
+            init_conn.close()
 
     def _get_connection(self) -> sqlite3.Connection:
         """Get a database connection."""
@@ -111,8 +117,6 @@ class SQLiteSessionMemory(SessionMemory):
                     check_same_thread=False,
                 )
                 self._local.connection.execute("PRAGMA journal_mode=WAL")
-                # Initialize the database schema for this connection
-                self._init_db_for_connection(self._local.connection)
             return self._local.connection
 
     def _init_db_for_connection(self, conn: sqlite3.Connection) -> None:
