@@ -96,11 +96,12 @@ class SQLiteSessionMemory(SessionMemory):
                 check_same_thread=False,
             )
             self._local.connection.execute("PRAGMA journal_mode=WAL")
+            # Initialize the database schema for this connection
+            self._init_db_for_connection(self._local.connection)
         return self._local.connection
 
-    def _init_db(self) -> None:
-        """Initialize the database schema."""
-        conn = self._get_connection()
+    def _init_db_for_connection(self, conn: sqlite3.Connection) -> None:
+        """Initialize the database schema for a specific connection."""
         conn.execute(
             f"""
             CREATE TABLE IF NOT EXISTS {self.sessions_table} (
@@ -131,6 +132,11 @@ class SQLiteSessionMemory(SessionMemory):
         )
 
         conn.commit()
+
+    def _init_db(self) -> None:
+        """Initialize the database schema."""
+        conn = self._get_connection()
+        # The schema initialization is now handled in _init_db_for_connection
 
     async def get_messages(self, session_id: str) -> list[TResponseInputItem]:
         """Retrieve the conversation history for a given session.
