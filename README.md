@@ -57,10 +57,10 @@ result = Runner.run_sync(
 print(result.final_output)  # "Approximately 39 million"
 ```
 
-### Memory options
+### Session options
 
 -   **No memory** (default): No session memory when session parameter is omitted
--   **`session=Session`**: Use the provided session implementation
+-   **`session: Session = DatabaseSession(...)`**: Use a Session instance to manage conversation history
 
 ```python
 from agents import Agent, Runner, SQLiteSession
@@ -82,7 +82,7 @@ result2 = await Runner.run(
 )
 ```
 
-### Custom memory implementations
+### Custom session implementations
 
 You can implement your own session memory by creating a class that follows the `Session` protocol:
 
