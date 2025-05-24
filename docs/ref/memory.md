@@ -6,5 +6,3 @@
         members:
             - Session
             - SQLiteSession
-            - SessionMemory
-            - SQLiteSessionMemory

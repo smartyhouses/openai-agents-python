@@ -166,7 +166,7 @@ result2 = await Runner.run(
 
 ## Custom memory implementations
 
-You can implement your own session memory by creating a class that follows the [`Session`][agents.memory.session_memory.Session] protocol:
+You can implement your own session memory by creating a class that follows the [`Session`][agents.memory.session.Session] protocol:
 
 ````python
 from agents.memory import Session
@@ -245,7 +245,7 @@ result2 = await Runner.run(
     "What are my charges?",
     session=session
 )
-```
+````
 
 ## Complete example
 
@@ -318,4 +318,3 @@ For detailed API documentation, see:
 -   [`Session`][agents.memory.Session] - Protocol interface
 -   [`SQLiteSession`][agents.memory.SQLiteSession] - SQLite implementation
 -   [`RunConfig.session`][agents.run.RunConfig.session] - Run configuration
-````

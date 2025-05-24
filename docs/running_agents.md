@@ -88,7 +88,7 @@ async def main():
 
 ### Automatic conversation management with Session Memory
 
-For a simpler approach, you can use [Session Memory](session_memory.md) to automatically handle conversation history without manually calling `.to_input_list()`:
+For a simpler approach, you can use [Session Memory](session.md) to automatically handle conversation history without manually calling `.to_input_list()`:
 
 ```python
 from agents import Agent, Runner, SQLiteSession
@@ -117,7 +117,7 @@ Session memory automatically:
 -   Stores new messages after each run
 -   Maintains separate conversations for different session IDs
 
-See the [Session Memory documentation](session_memory.md) for more details.
+See the [Session Memory documentation](session.md) for more details.
 
 ## Exceptions
 

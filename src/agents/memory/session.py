@@ -19,6 +19,8 @@ class Session(Protocol):
     agents to maintain context without requiring explicit manual memory management.
     """
 
+    session_id: str
+
     async def get_messages(self) -> list[TResponseInputItem]:
         """Retrieve the conversation history for this session.
 
@@ -293,8 +295,3 @@ class SQLiteSession(Session):
         else:
             if hasattr(self._local, "connection"):
                 self._local.connection.close()
-
-
-# Legacy aliases for backwards compatibility
-SessionMemory = Session
-SQLiteSessionMemory = SQLiteSession
