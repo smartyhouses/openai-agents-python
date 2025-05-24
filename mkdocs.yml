@@ -81,6 +81,7 @@ plugins:
                     - ref/index.md
                     - ref/agent.md
                     - ref/run.md
+                    - ref/memory.md
                     - ref/tool.md
                     - ref/result.md
                     - ref/stream_events.md

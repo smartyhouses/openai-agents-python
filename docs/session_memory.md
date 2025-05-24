@@ -237,7 +237,7 @@ if __name__ == "__main__":
 
 For detailed API documentation, see:
 
--   [`SessionMemory`][agents.memory.session_memory.SessionMemory] - Protocol interface
--   [`SQLiteSessionMemory`][agents.memory.session_memory.SQLiteSessionMemory] - SQLite implementation
+-   [`SessionMemory`][agents.memory.SessionMemory] - Protocol interface
+-   [`SQLiteSessionMemory`][agents.memory.SQLiteSessionMemory] - SQLite implementation
 -   [`RunConfig.memory`][agents.run.RunConfig.memory] - Run configuration
 -   [`RunConfig.session_id`][agents.run.RunConfig.session_id] - Session identifier
