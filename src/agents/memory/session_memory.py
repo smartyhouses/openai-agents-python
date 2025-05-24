@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import sqlite3
 import threading
@@ -140,26 +141,30 @@ class SQLiteSessionMemory(SessionMemory):
         Returns:
             List of input items representing the conversation history
         """
-        conn = self._get_connection()
-        cursor = conn.execute(
-            f"""
-            SELECT message_data FROM {self.messages_table} 
-            WHERE session_id = ? 
-            ORDER BY created_at ASC
-        """,
-            (session_id,),
-        )
 
-        messages = []
-        for (message_data,) in cursor.fetchall():
-            try:
-                message = json.loads(message_data)
-                messages.append(message)
-            except json.JSONDecodeError:
-                # Skip invalid JSON entries
-                continue
+        def _get_messages_sync():
+            conn = self._get_connection()
+            cursor = conn.execute(
+                f"""
+                SELECT message_data FROM {self.messages_table} 
+                WHERE session_id = ? 
+                ORDER BY created_at ASC
+            """,
+                (session_id,),
+            )
 
-        return messages
+            messages = []
+            for (message_data,) in cursor.fetchall():
+                try:
+                    message = json.loads(message_data)
+                    messages.append(message)
+                except json.JSONDecodeError:
+                    # Skip invalid JSON entries
+                    continue
+
+            return messages
+
+        return await asyncio.to_thread(_get_messages_sync)
 
     async def add_messages(
         self, session_id: str, messages: list[TResponseInputItem]
@@ -173,34 +178,37 @@ class SQLiteSessionMemory(SessionMemory):
         if not messages:
             return
 
-        conn = self._get_connection()
+        def _add_messages_sync():
+            conn = self._get_connection()
 
-        # Ensure session exists
-        conn.execute(
-            f"""
-            INSERT OR IGNORE INTO {self.sessions_table} (session_id) VALUES (?)
-        """,
-            (session_id,),
-        )
+            # Ensure session exists
+            conn.execute(
+                f"""
+                INSERT OR IGNORE INTO {self.sessions_table} (session_id) VALUES (?)
+            """,
+                (session_id,),
+            )
 
-        # Add messages
-        message_data = [(session_id, json.dumps(message)) for message in messages]
-        conn.executemany(
-            f"""
-            INSERT INTO {self.messages_table} (session_id, message_data) VALUES (?, ?)
-        """,
-            message_data,
-        )
+            # Add messages
+            message_data = [(session_id, json.dumps(message)) for message in messages]
+            conn.executemany(
+                f"""
+                INSERT INTO {self.messages_table} (session_id, message_data) VALUES (?, ?)
+            """,
+                message_data,
+            )
 
-        # Update session timestamp
-        conn.execute(
-            f"""
-            UPDATE {self.sessions_table} SET updated_at = CURRENT_TIMESTAMP WHERE session_id = ?
-        """,
-            (session_id,),
-        )
+            # Update session timestamp
+            conn.execute(
+                f"""
+                UPDATE {self.sessions_table} SET updated_at = CURRENT_TIMESTAMP WHERE session_id = ?
+            """,
+                (session_id,),
+            )
 
-        conn.commit()
+            conn.commit()
+
+        await asyncio.to_thread(_add_messages_sync)
 
     async def pop_message(self, session_id: str) -> TResponseInputItem | None:
         """Remove and return the most recent message from the session.
@@ -211,43 +219,47 @@ class SQLiteSessionMemory(SessionMemory):
         Returns:
             The most recent message if it exists, None if the session is empty
         """
-        conn = self._get_connection()
-        cursor = conn.execute(
-            f"""
-            SELECT id, message_data FROM {self.messages_table} 
-            WHERE session_id = ? 
-            ORDER BY created_at DESC
-            LIMIT 1
-        """,
-            (session_id,),
-        )
 
-        result = cursor.fetchone()
-        if result:
-            message_id, message_data = result
-            try:
-                message = json.loads(message_data)
-                # Delete the message by ID
-                conn.execute(
-                    f"""
-                    DELETE FROM {self.messages_table} WHERE id = ?
-                """,
-                    (message_id,),
-                )
-                conn.commit()
-                return message
-            except json.JSONDecodeError:
-                # Skip invalid JSON entries, but still delete the corrupted record
-                conn.execute(
-                    f"""
-                    DELETE FROM {self.messages_table} WHERE id = ?
-                """,
-                    (message_id,),
-                )
-                conn.commit()
-                return None
+        def _pop_message_sync():
+            conn = self._get_connection()
+            cursor = conn.execute(
+                f"""
+                SELECT id, message_data FROM {self.messages_table} 
+                WHERE session_id = ? 
+                ORDER BY created_at DESC
+                LIMIT 1
+            """,
+                (session_id,),
+            )
 
-        return None
+            result = cursor.fetchone()
+            if result:
+                message_id, message_data = result
+                try:
+                    message = json.loads(message_data)
+                    # Delete the message by ID
+                    conn.execute(
+                        f"""
+                        DELETE FROM {self.messages_table} WHERE id = ?
+                    """,
+                        (message_id,),
+                    )
+                    conn.commit()
+                    return message
+                except json.JSONDecodeError:
+                    # Skip invalid JSON entries, but still delete the corrupted record
+                    conn.execute(
+                        f"""
+                        DELETE FROM {self.messages_table} WHERE id = ?
+                    """,
+                        (message_id,),
+                    )
+                    conn.commit()
+                    return None
+
+            return None
+
+        return await asyncio.to_thread(_pop_message_sync)
 
     async def clear_session(self, session_id: str) -> None:
         """Clear all messages for a given session.
@@ -255,14 +267,18 @@ class SQLiteSessionMemory(SessionMemory):
         Args:
             session_id: Unique identifier for the conversation session
         """
-        conn = self._get_connection()
-        conn.execute(
-            f"DELETE FROM {self.messages_table} WHERE session_id = ?", (session_id,)
-        )
-        conn.execute(
-            f"DELETE FROM {self.sessions_table} WHERE session_id = ?", (session_id,)
-        )
-        conn.commit()
+
+        def _clear_session_sync():
+            conn = self._get_connection()
+            conn.execute(
+                f"DELETE FROM {self.messages_table} WHERE session_id = ?", (session_id,)
+            )
+            conn.execute(
+                f"DELETE FROM {self.sessions_table} WHERE session_id = ?", (session_id,)
+            )
+            conn.commit()
+
+        await asyncio.to_thread(_clear_session_sync)
 
     def close(self) -> None:
         """Close the database connection."""
