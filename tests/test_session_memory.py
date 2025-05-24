@@ -131,7 +131,7 @@ async def test_session_memory_different_sessions():
 
 @pytest.mark.asyncio
 async def test_session_memory_no_session_id():
-    """Test that session memory is disabled when no session_id is provided."""
+    """Test that session memory raises an exception when no session_id is provided."""
     model = FakeModel()
     agent = Agent(
         name="test", model=model, memory=True  # Memory enabled but no session_id
@@ -139,17 +139,11 @@ async def test_session_memory_no_session_id():
 
     run_config = RunConfig()  # No session_id
 
-    # First turn
-    model.set_next_output([get_text_message("Hello")])
-    result1 = await Runner.run(agent, "Hi there", run_config=run_config)
-    assert result1.final_output == "Hello"
-
-    # Second turn - should NOT have conversation history since no session_id
-    model.set_next_output([get_text_message("I don't remember")])
-    result2 = await Runner.run(
-        agent, "Do you remember what I said?", run_config=run_config
-    )
-    assert result2.final_output == "I don't remember"
+    # Should raise ValueError when trying to run with memory enabled but no session_id
+    with pytest.raises(
+        ValueError, match="session_id is required when memory is enabled"
+    ):
+        await Runner.run(agent, "Hi there", run_config=run_config)
 
 
 @pytest.mark.asyncio

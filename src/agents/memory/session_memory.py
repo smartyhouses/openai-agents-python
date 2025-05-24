@@ -1,24 +1,23 @@
 from __future__ import annotations
 
-import abc
 import json
 import sqlite3
 import threading
 from pathlib import Path
-from typing import Any, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from ..items import TResponseInputItem
 
 
-class SessionMemory(abc.ABC):
-    """Abstract base class for session memory implementations.
+@runtime_checkable
+class SessionMemory(Protocol):
+    """Protocol for session memory implementations.
 
     Session memory stores conversation history across agent runs, allowing
     agents to maintain context without requiring explicit manual memory management.
     """
 
-    @abc.abstractmethod
     async def get_messages(self, session_id: str) -> list[TResponseInputItem]:
         """Retrieve the conversation history for a given session.
 
@@ -28,9 +27,8 @@ class SessionMemory(abc.ABC):
         Returns:
             List of input items representing the conversation history
         """
-        pass
+        ...
 
-    @abc.abstractmethod
     async def add_messages(
         self, session_id: str, messages: list[TResponseInputItem]
     ) -> None:
@@ -40,16 +38,15 @@ class SessionMemory(abc.ABC):
             session_id: Unique identifier for the conversation session
             messages: List of input items to add to the history
         """
-        pass
+        ...
 
-    @abc.abstractmethod
     async def clear_session(self, session_id: str) -> None:
         """Clear all messages for a given session.
 
         Args:
             session_id: Unique identifier for the conversation session
         """
-        pass
+        ...
 
 
 class SQLiteSessionMemory(SessionMemory):

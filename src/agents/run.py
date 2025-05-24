@@ -1070,8 +1070,14 @@ class Runner:
     ) -> tuple[str | list[TResponseInputItem], SessionMemory | None]:
         """Prepare input by combining it with session memory if enabled."""
         memory = cls._get_session_memory(agent)
-        if memory is None or run_config.session_id is None:
+        if memory is None:
             return input, memory
+
+        if run_config.session_id is None:
+            raise ValueError(
+                "session_id is required when memory is enabled. "
+                "Please provide a session_id in the RunConfig."
+            )
 
         # Get previous conversation history
         history = await memory.get_messages(run_config.session_id)
