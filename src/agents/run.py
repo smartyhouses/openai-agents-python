@@ -552,173 +552,186 @@ class Runner:
         memory: SessionMemory | None,
         session_id: str | None,
     ):
-        if streamed_result.trace:
-            streamed_result.trace.start(mark_as_current=True)
-
-        # Prepare input with session memory if enabled
-        prepared_input, session_memory = await cls._prepare_input_with_memory(
-            starting_input, memory, session_id
-        )
-
-        # Update the streamed result with the prepared input
-        streamed_result.input = prepared_input
-
         current_span: Span[AgentSpanData] | None = None
-        current_agent = starting_agent
-        current_turn = 0
-        should_run_agent_start_hooks = True
-        tool_use_tracker = AgentToolUseTracker()
-
-        streamed_result._event_queue.put_nowait(
-            AgentUpdatedStreamEvent(new_agent=current_agent)
-        )
 
         try:
-            while True:
-                if streamed_result.is_complete:
-                    break
+            if streamed_result.trace:
+                streamed_result.trace.start(mark_as_current=True)
 
-                # Start an agent span if we don't have one. This span is ended if the current
-                # agent changes, or if the agent loop ends.
-                if current_span is None:
-                    handoff_names = [
-                        h.agent_name for h in cls._get_handoffs(current_agent)
-                    ]
-                    if output_schema := cls._get_output_schema(current_agent):
-                        output_type_name = output_schema.name()
-                    else:
-                        output_type_name = "str"
+            # Prepare input with session memory if enabled
+            prepared_input, session_memory = await cls._prepare_input_with_memory(
+                starting_input, memory, session_id
+            )
 
-                    current_span = agent_span(
-                        name=current_agent.name,
-                        handoffs=handoff_names,
-                        output_type=output_type_name,
-                    )
-                    current_span.start(mark_as_current=True)
+            # Update the streamed result with the prepared input
+            streamed_result.input = prepared_input
 
-                    all_tools = await cls._get_all_tools(current_agent)
-                    tool_names = [t.name for t in all_tools]
-                    current_span.span_data.tools = tool_names
-                current_turn += 1
-                streamed_result.current_turn = current_turn
+            current_agent = starting_agent
+            current_turn = 0
+            should_run_agent_start_hooks = True
+            tool_use_tracker = AgentToolUseTracker()
 
-                if current_turn > max_turns:
-                    _error_tracing.attach_error_to_span(
-                        current_span,
-                        SpanError(
-                            message="Max turns exceeded",
-                            data={"max_turns": max_turns},
-                        ),
-                    )
-                    streamed_result._event_queue.put_nowait(QueueCompleteSentinel())
-                    break
+            streamed_result._event_queue.put_nowait(
+                AgentUpdatedStreamEvent(new_agent=current_agent)
+            )
 
-                if current_turn == 1:
-                    # Run the input guardrails in the background and put the results on the queue
-                    streamed_result._input_guardrails_task = asyncio.create_task(
-                        cls._run_input_guardrails_with_queue(
-                            starting_agent,
-                            starting_agent.input_guardrails
-                            + (run_config.input_guardrails or []),
-                            copy.deepcopy(
-                                ItemHelpers.input_to_new_input_list(prepared_input)
-                            ),
-                            context_wrapper,
-                            streamed_result,
-                            current_span,
+            try:
+                while True:
+                    if streamed_result.is_complete:
+                        break
+
+                    # Start an agent span if we don't have one. This span is ended if the current
+                    # agent changes, or if the agent loop ends.
+                    if current_span is None:
+                        handoff_names = [
+                            h.agent_name for h in cls._get_handoffs(current_agent)
+                        ]
+                        if output_schema := cls._get_output_schema(current_agent):
+                            output_type_name = output_schema.name()
+                        else:
+                            output_type_name = "str"
+
+                        current_span = agent_span(
+                            name=current_agent.name,
+                            handoffs=handoff_names,
+                            output_type=output_type_name,
                         )
-                    )
-                try:
-                    turn_result = await cls._run_single_turn_streamed(
-                        streamed_result,
-                        current_agent,
-                        hooks,
-                        context_wrapper,
-                        run_config,
-                        should_run_agent_start_hooks,
-                        tool_use_tracker,
-                        all_tools,
-                        previous_response_id,
-                    )
-                    should_run_agent_start_hooks = False
+                        current_span.start(mark_as_current=True)
 
-                    streamed_result.raw_responses = streamed_result.raw_responses + [
-                        turn_result.model_response
-                    ]
-                    streamed_result.input = turn_result.original_input
-                    streamed_result.new_items = turn_result.generated_items
+                        all_tools = await cls._get_all_tools(current_agent)
+                        tool_names = [t.name for t in all_tools]
+                        current_span.span_data.tools = tool_names
+                    current_turn += 1
+                    streamed_result.current_turn = current_turn
 
-                    if isinstance(turn_result.next_step, NextStepHandoff):
-                        current_agent = turn_result.next_step.new_agent
-                        current_span.finish(reset_current=True)
-                        current_span = None
-                        should_run_agent_start_hooks = True
-                        streamed_result._event_queue.put_nowait(
-                            AgentUpdatedStreamEvent(new_agent=current_agent)
-                        )
-                    elif isinstance(turn_result.next_step, NextStepFinalOutput):
-                        streamed_result._output_guardrails_task = asyncio.create_task(
-                            cls._run_output_guardrails(
-                                current_agent.output_guardrails
-                                + (run_config.output_guardrails or []),
-                                current_agent,
-                                turn_result.next_step.output,
-                                context_wrapper,
-                            )
-                        )
-
-                        try:
-                            output_guardrail_results = (
-                                await streamed_result._output_guardrails_task
-                            )
-                        except Exception:
-                            # Exceptions will be checked in the stream_events loop
-                            output_guardrail_results = []
-
-                        streamed_result.output_guardrail_results = (
-                            output_guardrail_results
-                        )
-                        streamed_result.final_output = turn_result.next_step.output
-                        streamed_result.is_complete = True
-
-                        # Save the conversation to session memory if enabled
-                        # Create a temporary RunResult for memory saving
-                        temp_result = RunResult(
-                            input=streamed_result.input,
-                            new_items=streamed_result.new_items,
-                            raw_responses=streamed_result.raw_responses,
-                            final_output=streamed_result.final_output,
-                            _last_agent=current_agent,
-                            input_guardrail_results=streamed_result.input_guardrail_results,
-                            output_guardrail_results=streamed_result.output_guardrail_results,
-                            context_wrapper=context_wrapper,
-                        )
-                        await cls._save_result_to_memory(
-                            session_memory, session_id, starting_input, temp_result
-                        )
-
-                        streamed_result._event_queue.put_nowait(QueueCompleteSentinel())
-                    elif isinstance(turn_result.next_step, NextStepRunAgain):
-                        pass
-                except Exception as e:
-                    if current_span:
+                    if current_turn > max_turns:
                         _error_tracing.attach_error_to_span(
                             current_span,
                             SpanError(
-                                message="Error in agent run",
-                                data={"error": str(e)},
+                                message="Max turns exceeded",
+                                data={"max_turns": max_turns},
                             ),
                         )
-                    streamed_result.is_complete = True
-                    streamed_result._event_queue.put_nowait(QueueCompleteSentinel())
-                    raise
+                        streamed_result._event_queue.put_nowait(QueueCompleteSentinel())
+                        break
 
+                    if current_turn == 1:
+                        # Run the input guardrails in the background and put the results on the queue
+                        streamed_result._input_guardrails_task = asyncio.create_task(
+                            cls._run_input_guardrails_with_queue(
+                                starting_agent,
+                                starting_agent.input_guardrails
+                                + (run_config.input_guardrails or []),
+                                copy.deepcopy(
+                                    ItemHelpers.input_to_new_input_list(prepared_input)
+                                ),
+                                context_wrapper,
+                                streamed_result,
+                                current_span,
+                            )
+                        )
+                    try:
+                        turn_result = await cls._run_single_turn_streamed(
+                            streamed_result,
+                            current_agent,
+                            hooks,
+                            context_wrapper,
+                            run_config,
+                            should_run_agent_start_hooks,
+                            tool_use_tracker,
+                            all_tools,
+                            previous_response_id,
+                        )
+                        should_run_agent_start_hooks = False
+
+                        streamed_result.raw_responses = (
+                            streamed_result.raw_responses + [turn_result.model_response]
+                        )
+                        streamed_result.input = turn_result.original_input
+                        streamed_result.new_items = turn_result.generated_items
+
+                        if isinstance(turn_result.next_step, NextStepHandoff):
+                            current_agent = turn_result.next_step.new_agent
+                            current_span.finish(reset_current=True)
+                            current_span = None
+                            should_run_agent_start_hooks = True
+                            streamed_result._event_queue.put_nowait(
+                                AgentUpdatedStreamEvent(new_agent=current_agent)
+                            )
+                        elif isinstance(turn_result.next_step, NextStepFinalOutput):
+                            streamed_result._output_guardrails_task = (
+                                asyncio.create_task(
+                                    cls._run_output_guardrails(
+                                        current_agent.output_guardrails
+                                        + (run_config.output_guardrails or []),
+                                        current_agent,
+                                        turn_result.next_step.output,
+                                        context_wrapper,
+                                    )
+                                )
+                            )
+
+                            try:
+                                output_guardrail_results = (
+                                    await streamed_result._output_guardrails_task
+                                )
+                            except Exception:
+                                # Exceptions will be checked in the stream_events loop
+                                output_guardrail_results = []
+
+                            streamed_result.output_guardrail_results = (
+                                output_guardrail_results
+                            )
+                            streamed_result.final_output = turn_result.next_step.output
+                            streamed_result.is_complete = True
+
+                            # Save the conversation to session memory if enabled
+                            # Create a temporary RunResult for memory saving
+                            temp_result = RunResult(
+                                input=streamed_result.input,
+                                new_items=streamed_result.new_items,
+                                raw_responses=streamed_result.raw_responses,
+                                final_output=streamed_result.final_output,
+                                _last_agent=current_agent,
+                                input_guardrail_results=streamed_result.input_guardrail_results,
+                                output_guardrail_results=streamed_result.output_guardrail_results,
+                                context_wrapper=context_wrapper,
+                            )
+                            await cls._save_result_to_memory(
+                                session_memory, session_id, starting_input, temp_result
+                            )
+
+                            streamed_result._event_queue.put_nowait(
+                                QueueCompleteSentinel()
+                            )
+                        elif isinstance(turn_result.next_step, NextStepRunAgain):
+                            pass
+                    except Exception as e:
+                        if current_span:
+                            _error_tracing.attach_error_to_span(
+                                current_span,
+                                SpanError(
+                                    message="Error in agent run",
+                                    data={"error": str(e)},
+                                ),
+                            )
+                        streamed_result.is_complete = True
+                        streamed_result._event_queue.put_nowait(QueueCompleteSentinel())
+                        raise
+
+                streamed_result.is_complete = True
+            finally:
+                if current_span:
+                    current_span.finish(reset_current=True)
+                if streamed_result.trace:
+                    streamed_result.trace.finish(reset_current=True)
+
+        except Exception:
+            # Ensure that any exception (including those during setup) results in a completion sentinel
+            # being put in the queue so that stream_events() doesn't hang
             streamed_result.is_complete = True
-        finally:
-            if current_span:
-                current_span.finish(reset_current=True)
-            if streamed_result.trace:
-                streamed_result.trace.finish(reset_current=True)
+            streamed_result._event_queue.put_nowait(QueueCompleteSentinel())
+            raise
 
     @classmethod
     async def _run_single_turn_streamed(
