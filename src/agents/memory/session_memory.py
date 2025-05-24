@@ -86,18 +86,34 @@ class SQLiteSessionMemory(SessionMemory):
         self.sessions_table = sessions_table
         self.messages_table = messages_table
         self._local = threading.local()
+        self._lock = threading.Lock()
+
+        # For in-memory databases, we need a shared connection to avoid thread isolation
+        # For file databases, we use thread-local connections for better concurrency
+        self._is_memory_db = str(db_path) == ":memory:"
+        if self._is_memory_db:
+            self._shared_connection = sqlite3.connect(
+                ":memory:", check_same_thread=False
+            )
+            self._shared_connection.execute("PRAGMA journal_mode=WAL")
+            self._init_db_for_connection(self._shared_connection)
 
     def _get_connection(self) -> sqlite3.Connection:
-        """Get a thread-local database connection."""
-        if not hasattr(self._local, "connection"):
-            self._local.connection = sqlite3.connect(
-                str(self.db_path) if self.db_path != ":memory:" else self.db_path,
-                check_same_thread=False,
-            )
-            self._local.connection.execute("PRAGMA journal_mode=WAL")
-            # Initialize the database schema for this connection
-            self._init_db_for_connection(self._local.connection)
-        return self._local.connection
+        """Get a database connection."""
+        if self._is_memory_db:
+            # Use shared connection for in-memory database to avoid thread isolation
+            return self._shared_connection
+        else:
+            # Use thread-local connections for file databases
+            if not hasattr(self._local, "connection"):
+                self._local.connection = sqlite3.connect(
+                    str(self.db_path),
+                    check_same_thread=False,
+                )
+                self._local.connection.execute("PRAGMA journal_mode=WAL")
+                # Initialize the database schema for this connection
+                self._init_db_for_connection(self._local.connection)
+            return self._local.connection
 
     def _init_db_for_connection(self, conn: sqlite3.Connection) -> None:
         """Initialize the database schema for a specific connection."""
@@ -144,25 +160,26 @@ class SQLiteSessionMemory(SessionMemory):
 
         def _get_messages_sync():
             conn = self._get_connection()
-            cursor = conn.execute(
-                f"""
-                SELECT message_data FROM {self.messages_table} 
-                WHERE session_id = ? 
-                ORDER BY created_at ASC
-            """,
-                (session_id,),
-            )
+            with self._lock if self._is_memory_db else threading.Lock():
+                cursor = conn.execute(
+                    f"""
+                    SELECT message_data FROM {self.messages_table} 
+                    WHERE session_id = ? 
+                    ORDER BY created_at ASC
+                """,
+                    (session_id,),
+                )
 
-            messages = []
-            for (message_data,) in cursor.fetchall():
-                try:
-                    message = json.loads(message_data)
-                    messages.append(message)
-                except json.JSONDecodeError:
-                    # Skip invalid JSON entries
-                    continue
+                messages = []
+                for (message_data,) in cursor.fetchall():
+                    try:
+                        message = json.loads(message_data)
+                        messages.append(message)
+                    except json.JSONDecodeError:
+                        # Skip invalid JSON entries
+                        continue
 
-            return messages
+                return messages
 
         return await asyncio.to_thread(_get_messages_sync)
 
@@ -181,32 +198,35 @@ class SQLiteSessionMemory(SessionMemory):
         def _add_messages_sync():
             conn = self._get_connection()
 
-            # Ensure session exists
-            conn.execute(
-                f"""
-                INSERT OR IGNORE INTO {self.sessions_table} (session_id) VALUES (?)
-            """,
-                (session_id,),
-            )
+            with self._lock if self._is_memory_db else threading.Lock():
+                # Ensure session exists
+                conn.execute(
+                    f"""
+                    INSERT OR IGNORE INTO {self.sessions_table} (session_id) VALUES (?)
+                """,
+                    (session_id,),
+                )
 
-            # Add messages
-            message_data = [(session_id, json.dumps(message)) for message in messages]
-            conn.executemany(
-                f"""
-                INSERT INTO {self.messages_table} (session_id, message_data) VALUES (?, ?)
-            """,
-                message_data,
-            )
+                # Add messages
+                message_data = [
+                    (session_id, json.dumps(message)) for message in messages
+                ]
+                conn.executemany(
+                    f"""
+                    INSERT INTO {self.messages_table} (session_id, message_data) VALUES (?, ?)
+                """,
+                    message_data,
+                )
 
-            # Update session timestamp
-            conn.execute(
-                f"""
-                UPDATE {self.sessions_table} SET updated_at = CURRENT_TIMESTAMP WHERE session_id = ?
-            """,
-                (session_id,),
-            )
+                # Update session timestamp
+                conn.execute(
+                    f"""
+                    UPDATE {self.sessions_table} SET updated_at = CURRENT_TIMESTAMP WHERE session_id = ?
+                """,
+                    (session_id,),
+                )
 
-            conn.commit()
+                conn.commit()
 
         await asyncio.to_thread(_add_messages_sync)
 
@@ -222,42 +242,43 @@ class SQLiteSessionMemory(SessionMemory):
 
         def _pop_message_sync():
             conn = self._get_connection()
-            cursor = conn.execute(
-                f"""
-                SELECT id, message_data FROM {self.messages_table} 
-                WHERE session_id = ? 
-                ORDER BY created_at DESC
-                LIMIT 1
-            """,
-                (session_id,),
-            )
+            with self._lock if self._is_memory_db else threading.Lock():
+                cursor = conn.execute(
+                    f"""
+                    SELECT id, message_data FROM {self.messages_table} 
+                    WHERE session_id = ? 
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                """,
+                    (session_id,),
+                )
 
-            result = cursor.fetchone()
-            if result:
-                message_id, message_data = result
-                try:
-                    message = json.loads(message_data)
-                    # Delete the message by ID
-                    conn.execute(
-                        f"""
-                        DELETE FROM {self.messages_table} WHERE id = ?
-                    """,
-                        (message_id,),
-                    )
-                    conn.commit()
-                    return message
-                except json.JSONDecodeError:
-                    # Skip invalid JSON entries, but still delete the corrupted record
-                    conn.execute(
-                        f"""
-                        DELETE FROM {self.messages_table} WHERE id = ?
-                    """,
-                        (message_id,),
-                    )
-                    conn.commit()
-                    return None
+                result = cursor.fetchone()
+                if result:
+                    message_id, message_data = result
+                    try:
+                        message = json.loads(message_data)
+                        # Delete the message by ID
+                        conn.execute(
+                            f"""
+                            DELETE FROM {self.messages_table} WHERE id = ?
+                        """,
+                            (message_id,),
+                        )
+                        conn.commit()
+                        return message
+                    except json.JSONDecodeError:
+                        # Skip invalid JSON entries, but still delete the corrupted record
+                        conn.execute(
+                            f"""
+                            DELETE FROM {self.messages_table} WHERE id = ?
+                        """,
+                            (message_id,),
+                        )
+                        conn.commit()
+                        return None
 
-            return None
+                return None
 
         return await asyncio.to_thread(_pop_message_sync)
 
@@ -270,17 +291,24 @@ class SQLiteSessionMemory(SessionMemory):
 
         def _clear_session_sync():
             conn = self._get_connection()
-            conn.execute(
-                f"DELETE FROM {self.messages_table} WHERE session_id = ?", (session_id,)
-            )
-            conn.execute(
-                f"DELETE FROM {self.sessions_table} WHERE session_id = ?", (session_id,)
-            )
-            conn.commit()
+            with self._lock if self._is_memory_db else threading.Lock():
+                conn.execute(
+                    f"DELETE FROM {self.messages_table} WHERE session_id = ?",
+                    (session_id,),
+                )
+                conn.execute(
+                    f"DELETE FROM {self.sessions_table} WHERE session_id = ?",
+                    (session_id,),
+                )
+                conn.commit()
 
         await asyncio.to_thread(_clear_session_sync)
 
     def close(self) -> None:
         """Close the database connection."""
-        if hasattr(self._local, "connection"):
-            self._local.connection.close()
+        if self._is_memory_db:
+            if hasattr(self, "_shared_connection"):
+                self._shared_connection.close()
+        else:
+            if hasattr(self._local, "connection"):
+                self._local.connection.close()
