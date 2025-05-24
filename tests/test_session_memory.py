@@ -68,6 +68,25 @@ async def test_session_memory_with_boolean_true():
 
 
 @pytest.mark.asyncio
+async def test_session_memory_instance_reuse():
+    """Test that when memory=True, the same memory instance is reused across runs."""
+    agent = Agent(name="test", memory=True)
+
+    # Get memory instance for the first time
+    memory1 = Runner._get_session_memory(agent)
+
+    # Get memory instance for the second time
+    memory2 = Runner._get_session_memory(agent)
+
+    # Should be the exact same instance
+    assert memory1 is memory2
+
+    # Should have created the _session_memory_instance attribute
+    assert hasattr(agent, "_session_memory_instance")
+    assert agent._session_memory_instance is memory1
+
+
+@pytest.mark.asyncio
 async def test_session_memory_disabled():
     """Test that session memory is disabled when memory=None."""
     model = FakeModel()

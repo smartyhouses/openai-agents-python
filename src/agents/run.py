@@ -1055,7 +1055,11 @@ class Runner:
         if agent.memory is None:
             return None
         elif agent.memory is True:
-            return SQLiteSessionMemory()
+            # For memory=True, we need to create a memory instance if it doesn't exist
+            # and store it on the agent to ensure consistency across runs
+            if not hasattr(agent, '_session_memory_instance'):
+                agent._session_memory_instance = SQLiteSessionMemory()
+            return agent._session_memory_instance
         elif isinstance(agent.memory, SessionMemory):
             return agent.memory
         else:
