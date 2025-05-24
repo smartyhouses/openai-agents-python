@@ -40,6 +40,17 @@ class SessionMemory(Protocol):
         """
         ...
 
+    async def pop_message(self, session_id: str) -> TResponseInputItem | None:
+        """Remove and return the most recent message from the session.
+
+        Args:
+            session_id: Unique identifier for the conversation session
+
+        Returns:
+            The most recent message if it exists, None if the session is empty
+        """
+        ...
+
     async def clear_session(self, session_id: str) -> None:
         """Clear all messages for a given session.
 
@@ -190,6 +201,53 @@ class SQLiteSessionMemory(SessionMemory):
         )
 
         conn.commit()
+
+    async def pop_message(self, session_id: str) -> TResponseInputItem | None:
+        """Remove and return the most recent message from the session.
+
+        Args:
+            session_id: Unique identifier for the conversation session
+
+        Returns:
+            The most recent message if it exists, None if the session is empty
+        """
+        conn = self._get_connection()
+        cursor = conn.execute(
+            f"""
+            SELECT id, message_data FROM {self.messages_table} 
+            WHERE session_id = ? 
+            ORDER BY created_at DESC
+            LIMIT 1
+        """,
+            (session_id,),
+        )
+
+        result = cursor.fetchone()
+        if result:
+            message_id, message_data = result
+            try:
+                message = json.loads(message_data)
+                # Delete the message by ID
+                conn.execute(
+                    f"""
+                    DELETE FROM {self.messages_table} WHERE id = ?
+                """,
+                    (message_id,),
+                )
+                conn.commit()
+                return message
+            except json.JSONDecodeError:
+                # Skip invalid JSON entries, but still delete the corrupted record
+                conn.execute(
+                    f"""
+                    DELETE FROM {self.messages_table} WHERE id = ?
+                """,
+                    (message_id,),
+                )
+                conn.commit()
+                return None
+
+        return None
 
     async def clear_session(self, session_id: str) -> None:
         """Clear all messages for a given session.

@@ -47,6 +47,60 @@ When session memory is enabled:
 
 This eliminates the need to manually call `.to_input_list()` and manage conversation state between runs.
 
+## Memory operations
+
+### Basic operations
+
+Session memory supports several operations for managing conversation history:
+
+```python
+from agents import SQLiteSessionMemory
+
+memory = SQLiteSessionMemory("conversations.db")
+session_id = "user_123"
+
+# Get all messages in a session
+messages = await memory.get_messages(session_id)
+
+# Add new messages to a session
+new_messages = [
+    {"role": "user", "content": "Hello"},
+    {"role": "assistant", "content": "Hi there!"}
+]
+await memory.add_messages(session_id, new_messages)
+
+# Remove and return the most recent message
+last_message = await memory.pop_message(session_id)
+print(last_message)  # {"role": "assistant", "content": "Hi there!"}
+
+# Clear all messages from a session
+await memory.clear_session(session_id)
+```
+
+### Using pop_message for corrections
+
+The `pop_message` method is particularly useful when you want to undo or modify the last message in a conversation:
+
+```python
+from agents import Agent, Runner, RunConfig, SQLiteSessionMemory
+
+agent = Agent(name="Assistant")
+memory = SQLiteSessionMemory()
+run_config = RunConfig(memory=memory, session_id="correction_example")
+
+# Initial conversation
+result = await Runner.run(agent, "What's 2 + 2?", run_config=run_config)
+print(f"Agent: {result.final_output}")
+
+# User wants to correct their question
+user_message = await memory.pop_message("correction_example")  # Remove user's question
+assistant_message = await memory.pop_message("correction_example")  # Remove agent's response
+
+# Ask a corrected question
+result = await Runner.run(agent, "What's 2 + 3?", run_config=run_config)
+print(f"Agent: {result.final_output}")
+```
+
 ## Memory options
 
 ### No memory (default)
@@ -105,6 +159,11 @@ class MyCustomMemory:
 
     async def add_messages(self, session_id: str, messages: List[dict]) -> None:
         """Store new messages for the session."""
+        # Your implementation here
+        pass
+
+    async def pop_message(self, session_id: str) -> dict | None:
+        """Remove and return the most recent message from the session."""
         # Your implementation here
         pass
 

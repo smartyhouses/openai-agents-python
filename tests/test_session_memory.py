@@ -183,6 +183,106 @@ async def test_sqlite_session_memory_direct():
         memory.close()
 
 
+@pytest.mark.asyncio
+async def test_sqlite_session_memory_pop_message():
+    """Test SQLiteSessionMemory pop_message functionality."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        db_path = Path(temp_dir) / "test_pop.db"
+        memory = SQLiteSessionMemory(db_path)
+
+        session_id = "pop_test"
+
+        # Test popping from empty session
+        popped = await memory.pop_message(session_id)
+        assert popped is None
+
+        # Add messages
+        messages = [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi there!"},
+            {"role": "user", "content": "How are you?"},
+        ]
+
+        await memory.add_messages(session_id, messages)
+
+        # Verify all messages are there
+        retrieved = await memory.get_messages(session_id)
+        assert len(retrieved) == 3
+
+        # Pop the most recent message
+        popped = await memory.pop_message(session_id)
+        assert popped is not None
+        assert popped["role"] == "user"
+        assert popped["content"] == "How are you?"
+
+        # Verify message was removed
+        retrieved_after_pop = await memory.get_messages(session_id)
+        assert len(retrieved_after_pop) == 2
+        assert retrieved_after_pop[-1]["content"] == "Hi there!"
+
+        # Pop another message
+        popped2 = await memory.pop_message(session_id)
+        assert popped2 is not None
+        assert popped2["role"] == "assistant"
+        assert popped2["content"] == "Hi there!"
+
+        # Pop the last message
+        popped3 = await memory.pop_message(session_id)
+        assert popped3 is not None
+        assert popped3["role"] == "user"
+        assert popped3["content"] == "Hello"
+
+        # Try to pop from empty session again
+        popped4 = await memory.pop_message(session_id)
+        assert popped4 is None
+
+        # Verify session is empty
+        final_messages = await memory.get_messages(session_id)
+        assert len(final_messages) == 0
+
+        memory.close()
+
+
+@pytest.mark.asyncio
+async def test_session_memory_pop_different_sessions():
+    """Test that pop_message only affects the specified session."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        db_path = Path(temp_dir) / "test_pop_sessions.db"
+        memory = SQLiteSessionMemory(db_path)
+
+        session_1 = "session_1"
+        session_2 = "session_2"
+
+        # Add messages to both sessions
+        messages_1 = [
+            {"role": "user", "content": "Session 1 message"},
+        ]
+        messages_2 = [
+            {"role": "user", "content": "Session 2 message 1"},
+            {"role": "user", "content": "Session 2 message 2"},
+        ]
+
+        await memory.add_messages(session_1, messages_1)
+        await memory.add_messages(session_2, messages_2)
+
+        # Pop from session 2
+        popped = await memory.pop_message(session_2)
+        assert popped is not None
+        assert popped["content"] == "Session 2 message 2"
+
+        # Verify session 1 is unaffected
+        session_1_messages = await memory.get_messages(session_1)
+        assert len(session_1_messages) == 1
+        assert session_1_messages[0]["content"] == "Session 1 message"
+
+        # Verify session 2 has one message left
+        session_2_messages = await memory.get_messages(session_2)
+        assert len(session_2_messages) == 1
+        assert session_2_messages[0]["content"] == "Session 2 message 1"
+
+        memory.close()
+
+
 def test_session_memory_invalid_config():
     """Test that invalid memory configuration raises ValueError."""
     with pytest.raises(ValueError, match="Invalid memory configuration"):
