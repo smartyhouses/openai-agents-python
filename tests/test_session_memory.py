@@ -79,8 +79,7 @@ async def test_session_memory_disabled():
     model = FakeModel()
     agent = Agent(name="test", model=model)
 
-    session_id = "test_session_789"
-    run_config = RunConfig(memory=None, session_id=session_id)  # No session memory
+    run_config = RunConfig(memory=None)  # No session memory
 
     # First turn
     model.set_next_output([get_text_message("Hello")])
@@ -148,6 +147,22 @@ async def test_session_memory_no_session_id():
     with pytest.raises(
         ValueError, match="session_id is required when memory is enabled"
     ):
+        await Runner.run(agent, "Hi there", run_config=run_config)
+
+
+@pytest.mark.asyncio
+async def test_session_id_without_memory():
+    """Test that providing session_id without memory raises an exception."""
+    model = FakeModel()
+    agent = Agent(name="test", model=model)
+
+    session_id = "test_session_without_memory"
+    run_config = RunConfig(
+        memory=None, session_id=session_id
+    )  # session_id but no memory
+
+    # Should raise ValueError when trying to run with session_id but no memory
+    with pytest.raises(ValueError, match="session_id provided but memory is disabled"):
         await Runner.run(agent, "Hi there", run_config=run_config)
 
 

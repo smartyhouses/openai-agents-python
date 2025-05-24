@@ -1075,6 +1075,12 @@ class Runner:
         """Prepare input by combining it with session memory if enabled."""
         memory = cls._get_session_memory(run_config)
         if memory is None:
+            # Check if session_id is provided without memory
+            if run_config.session_id is not None:
+                raise ValueError(
+                    "session_id provided but memory is disabled. "
+                    "Please enable memory in the RunConfig or remove session_id."
+                )
             return input, memory
 
         if run_config.session_id is None:
