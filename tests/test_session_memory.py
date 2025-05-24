@@ -2,12 +2,10 @@
 
 import pytest
 import tempfile
-import os
 from pathlib import Path
 import asyncio
 
-from agents import Agent, Runner, RunConfig, SQLiteSessionMemory
-from agents.memory import SessionMemory
+from agents import Agent, Runner, SQLiteSessionMemory
 
 from .fake_model import FakeModel
 from .test_responses import get_text_message
