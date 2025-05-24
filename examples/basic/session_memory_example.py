@@ -6,22 +6,26 @@ across multiple agent runs without manually handling .to_input_list().
 """
 
 import asyncio
-from agents import Agent, Runner, RunConfig
+from agents import Agent, Runner, RunConfig, SQLiteSessionMemory
 
 
 async def main():
-    # Create an agent with session memory enabled
+    # Create an agent
     agent = Agent(
         name="Assistant",
         instructions="Reply very concisely.",
-        memory=True,  # Enable default SQLite session memory
     )
+
+    # Create a session memory instance that will persist across runs
+    memory = SQLiteSessionMemory()
 
     # Define a session ID for this conversation
     session_id = "conversation_123"
 
-    # Create run config with session ID
-    run_config = RunConfig(session_id=session_id)
+    # Create run config with session memory and session ID
+    run_config = RunConfig(
+        memory=memory, session_id=session_id  # Use our session memory instance
+    )
 
     print("=== Session Memory Example ===")
     print("The agent will remember previous messages automatically.\n")
@@ -53,9 +57,7 @@ async def main():
 
     print("=== Conversation Complete ===")
     print("Notice how the agent remembered the context from previous turns!")
-    print(
-        "No need to manually handle .to_input_list() - session memory handles it automatically."
-    )
+    print("Session memory in RunConfig handles conversation history automatically.")
 
 
 if __name__ == "__main__":

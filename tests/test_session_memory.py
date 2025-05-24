@@ -20,10 +20,10 @@ async def test_session_memory_basic_functionality():
         memory = SQLiteSessionMemory(db_path)
 
         model = FakeModel()
-        agent = Agent(name="test", model=model, memory=memory)
+        agent = Agent(name="test", model=model)
 
         session_id = "test_session_123"
-        run_config = RunConfig(session_id=session_id)
+        run_config = RunConfig(memory=memory, session_id=session_id)
 
         # First turn
         model.set_next_output([get_text_message("San Francisco")])
@@ -46,54 +46,41 @@ async def test_session_memory_basic_functionality():
 
 
 @pytest.mark.asyncio
-async def test_session_memory_with_boolean_true():
-    """Test session memory when agent.memory=True (default SQLite)."""
-    model = FakeModel()
-    agent = Agent(name="test", model=model, memory=True)  # Use default SQLite memory
+async def test_session_memory_with_explicit_instance():
+    """Test session memory with an explicit SQLiteSessionMemory instance."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        db_path = Path(temp_dir) / "test_memory.db"
+        memory = SQLiteSessionMemory(db_path)
 
-    session_id = "test_session_456"
-    run_config = RunConfig(session_id=session_id)
+        model = FakeModel()
+        agent = Agent(name="test", model=model)
 
-    # First turn
-    model.set_next_output([get_text_message("Hello")])
-    result1 = await Runner.run(agent, "Hi there", run_config=run_config)
-    assert result1.final_output == "Hello"
+        session_id = "test_session_456"
+        run_config = RunConfig(memory=memory, session_id=session_id)
 
-    # Second turn
-    model.set_next_output([get_text_message("I remember you said hi")])
-    result2 = await Runner.run(
-        agent, "Do you remember what I said?", run_config=run_config
-    )
-    assert result2.final_output == "I remember you said hi"
+        # First turn
+        model.set_next_output([get_text_message("Hello")])
+        result1 = await Runner.run(agent, "Hi there", run_config=run_config)
+        assert result1.final_output == "Hello"
 
+        # Second turn
+        model.set_next_output([get_text_message("I remember you said hi")])
+        result2 = await Runner.run(
+            agent, "Do you remember what I said?", run_config=run_config
+        )
+        assert result2.final_output == "I remember you said hi"
 
-@pytest.mark.asyncio
-async def test_session_memory_instance_reuse():
-    """Test that when memory=True, the same memory instance is reused across runs."""
-    agent = Agent(name="test", memory=True)
-
-    # Get memory instance for the first time
-    memory1 = Runner._get_session_memory(agent)
-
-    # Get memory instance for the second time
-    memory2 = Runner._get_session_memory(agent)
-
-    # Should be the exact same instance
-    assert memory1 is memory2
-
-    # Should have created the _session_memory_instance attribute
-    assert hasattr(agent, "_session_memory_instance")
-    assert agent._session_memory_instance is memory1
+        memory.close()
 
 
 @pytest.mark.asyncio
 async def test_session_memory_disabled():
     """Test that session memory is disabled when memory=None."""
     model = FakeModel()
-    agent = Agent(name="test", model=model, memory=None)  # No session memory
+    agent = Agent(name="test", model=model)
 
     session_id = "test_session_789"
-    run_config = RunConfig(session_id=session_id)
+    run_config = RunConfig(memory=None, session_id=session_id)  # No session memory
 
     # First turn
     model.set_next_output([get_text_message("Hello")])
@@ -120,11 +107,11 @@ async def test_session_memory_different_sessions():
         memory = SQLiteSessionMemory(db_path)
 
         model = FakeModel()
-        agent = Agent(name="test", model=model, memory=memory)
+        agent = Agent(name="test", model=model)
 
         # Session 1
         session_id_1 = "session_1"
-        run_config_1 = RunConfig(session_id=session_id_1)
+        run_config_1 = RunConfig(memory=memory, session_id=session_id_1)
 
         model.set_next_output([get_text_message("I like cats")])
         result1 = await Runner.run(agent, "I like cats", run_config=run_config_1)
@@ -132,7 +119,7 @@ async def test_session_memory_different_sessions():
 
         # Session 2 - different session
         session_id_2 = "session_2"
-        run_config_2 = RunConfig(session_id=session_id_2)
+        run_config_2 = RunConfig(memory=memory, session_id=session_id_2)
 
         model.set_next_output([get_text_message("I like dogs")])
         result2 = await Runner.run(agent, "I like dogs", run_config=run_config_2)
@@ -152,11 +139,10 @@ async def test_session_memory_different_sessions():
 async def test_session_memory_no_session_id():
     """Test that session memory raises an exception when no session_id is provided."""
     model = FakeModel()
-    agent = Agent(
-        name="test", model=model, memory=True  # Memory enabled but no session_id
-    )
+    agent = Agent(name="test", model=model)
+    memory = SQLiteSessionMemory()
 
-    run_config = RunConfig()  # No session_id
+    run_config = RunConfig(memory=memory)  # Memory enabled but no session_id
 
     # Should raise ValueError when trying to run with memory enabled but no session_id
     with pytest.raises(
@@ -200,5 +186,5 @@ async def test_sqlite_session_memory_direct():
 def test_session_memory_invalid_config():
     """Test that invalid memory configuration raises ValueError."""
     with pytest.raises(ValueError, match="Invalid memory configuration"):
-        agent = Agent(name="test", memory="invalid")
-        Runner._get_session_memory(agent)
+        run_config = RunConfig(memory="invalid")
+        Runner._get_session_memory(run_config)

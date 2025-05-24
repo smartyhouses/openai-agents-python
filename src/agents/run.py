@@ -111,10 +111,17 @@ class RunConfig:
     An optional dictionary of additional metadata to include with the trace.
     """
 
+    memory: SessionMemory | None = None
+    """
+    Session memory instance for conversation history persistence.
+    - None (default): No session memory
+    - SessionMemory instance: Use the provided session memory implementation
+    """
+
     session_id: str | None = None
     """
-    A session identifier for memory persistence. If provided and the agent has memory enabled,
-    conversation history will be automatically managed using this session ID.
+    A session identifier for memory persistence. Required when memory is enabled.
+    Conversation history will be automatically managed using this session ID.
     """
 
 
@@ -168,7 +175,7 @@ class Runner:
 
         # Prepare input with session memory if enabled
         prepared_input, session_memory = await cls._prepare_input_with_memory(
-            starting_agent, input, run_config
+            input, run_config
         )
 
         tool_use_tracker = AgentToolUseTracker()
@@ -533,7 +540,7 @@ class Runner:
 
         # Prepare input with session memory if enabled
         prepared_input, session_memory = await cls._prepare_input_with_memory(
-            starting_agent, starting_input, run_config
+            starting_input, run_config
         )
 
         # Update the streamed result with the prepared input
@@ -1050,30 +1057,23 @@ class Runner:
         return run_config.model_provider.get_model(agent.model)
 
     @classmethod
-    def _get_session_memory(cls, agent: Agent[Any]) -> SessionMemory | None:
-        """Get the session memory instance for the agent, if any."""
-        if agent.memory is None:
+    def _get_session_memory(cls, run_config: RunConfig) -> SessionMemory | None:
+        """Get the session memory instance from run config, if any."""
+        if run_config.memory is None:
             return None
-        elif agent.memory is True:
-            # For memory=True, we need to create a memory instance if it doesn't exist
-            # and store it on the agent to ensure consistency across runs
-            if not hasattr(agent, '_session_memory_instance'):
-                agent._session_memory_instance = SQLiteSessionMemory()
-            return agent._session_memory_instance
-        elif isinstance(agent.memory, SessionMemory):
-            return agent.memory
+        elif isinstance(run_config.memory, SessionMemory):
+            return run_config.memory
         else:
-            raise ValueError(f"Invalid memory configuration: {agent.memory}")
+            raise ValueError(f"Invalid memory configuration: {run_config.memory}")
 
     @classmethod
     async def _prepare_input_with_memory(
         cls,
-        agent: Agent[Any],
         input: str | list[TResponseInputItem],
         run_config: RunConfig,
     ) -> tuple[str | list[TResponseInputItem], SessionMemory | None]:
         """Prepare input by combining it with session memory if enabled."""
-        memory = cls._get_session_memory(agent)
+        memory = cls._get_session_memory(run_config)
         if memory is None:
             return input, memory
 
