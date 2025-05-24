@@ -21,7 +21,7 @@ The Agents SDK provides built-in session memory to automatically maintain conver
 ### Quick start
 
 ```python
-from agents import Agent, Runner, RunConfig, SQLiteSessionMemory
+from agents import Agent, Runner, SQLiteSessionMemory
 
 # Create agent
 agent = Agent(
@@ -32,40 +32,59 @@ agent = Agent(
 # Create a session memory instance
 memory = SQLiteSessionMemory()
 
-# Configure run with session memory and session ID
-run_config = RunConfig(
-    memory=memory,  # Use our session memory instance
+# First turn
+result = await Runner.run(
+    agent,
+    "What city is the Golden Gate Bridge in?",
+    memory=memory,
     session_id="conversation_123"
 )
-
-# First turn
-result = await Runner.run(agent, "What city is the Golden Gate Bridge in?", run_config=run_config)
 print(result.final_output)  # "San Francisco"
 
 # Second turn - agent automatically remembers previous context
-result = await Runner.run(agent, "What state is it in?", run_config=run_config)
+result = await Runner.run(
+    agent,
+    "What state is it in?",
+    memory=memory,
+    session_id="conversation_123"
+)
 print(result.final_output)  # "California"
 
 # Also works with synchronous runner
-result = Runner.run_sync(agent, "What's the population?", run_config=run_config)
+result = Runner.run_sync(
+    agent,
+    "What's the population?",
+    memory=memory,
+    session_id="conversation_123"
+)
 print(result.final_output)  # "Approximately 39 million"
 ```
 
 ### Memory options
 
--   **`memory=None`** (default): No session memory
+-   **No memory** (default): No session memory when memory parameter is omitted
 -   **`memory=SessionMemory`**: Use the provided session memory implementation
 
 ```python
-from agents import Agent, Runner, RunConfig, SQLiteSessionMemory
+from agents import Agent, Runner, SQLiteSessionMemory
 
 # Custom SQLite database file
 memory = SQLiteSessionMemory("conversations.db")
 agent = Agent(name="Assistant")
 
 # Different session IDs maintain separate conversation histories
-run_config_1 = RunConfig(memory=memory, session_id="user_123")
-run_config_2 = RunConfig(memory=memory, session_id="user_456")
+result1 = await Runner.run(
+    agent,
+    "Hello",
+    memory=memory,
+    session_id="user_123"
+)
+result2 = await Runner.run(
+    agent,
+    "Hello",
+    memory=memory,
+    session_id="user_456"
+)
 ```
 
 ### Custom memory implementations
@@ -93,24 +112,34 @@ class MyCustomMemory:
 
 # Use your custom memory
 agent = Agent(name="Assistant")
-run_config = RunConfig(memory=MyCustomMemory(), session_id="my_session")
+result = await Runner.run(
+    agent,
+    "Hello",
+    memory=MyCustomMemory(),
+    session_id="my_session"
+)
 ```
 
 ### Important: session_id requirement
 
-When session memory is enabled, you **must** provide a `session_id` in the `RunConfig`. If you don't, the runner will raise a `ValueError`:
+When session memory is enabled, you **must** provide a `session_id`. If you don't, the runner will raise a `ValueError`:
 
 ```python
-from agents import Agent, Runner, RunConfig, SQLiteSessionMemory
+from agents import Agent, Runner, SQLiteSessionMemory
 
 agent = Agent(name="Assistant")
 memory = SQLiteSessionMemory()
 
 # This will raise ValueError: "session_id is required when memory is enabled"
-result = await Runner.run(agent, "Hello", run_config=RunConfig(memory=memory))
+result = await Runner.run(agent, "Hello", memory=memory)
 
 # This works correctly
-result = await Runner.run(agent, "Hello", run_config=RunConfig(memory=memory, session_id="my_session"))
+result = await Runner.run(
+    agent,
+    "Hello",
+    memory=memory,
+    session_id="my_session"
+)
 ```
 
 ## Get started

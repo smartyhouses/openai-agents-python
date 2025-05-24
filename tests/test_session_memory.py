@@ -23,18 +23,22 @@ async def test_session_memory_basic_functionality():
         agent = Agent(name="test", model=model)
 
         session_id = "test_session_123"
-        run_config = RunConfig(memory=memory, session_id=session_id)
 
         # First turn
         model.set_next_output([get_text_message("San Francisco")])
         result1 = await Runner.run(
-            agent, "What city is the Golden Gate Bridge in?", run_config=run_config
+            agent,
+            "What city is the Golden Gate Bridge in?",
+            memory=memory,
+            session_id=session_id,
         )
         assert result1.final_output == "San Francisco"
 
         # Second turn - should have conversation history
         model.set_next_output([get_text_message("California")])
-        result2 = await Runner.run(agent, "What state is it in?", run_config=run_config)
+        result2 = await Runner.run(
+            agent, "What state is it in?", memory=memory, session_id=session_id
+        )
         assert result2.final_output == "California"
 
         # Verify that the input to the second turn includes the previous conversation
@@ -56,17 +60,18 @@ async def test_session_memory_with_explicit_instance():
         agent = Agent(name="test", model=model)
 
         session_id = "test_session_456"
-        run_config = RunConfig(memory=memory, session_id=session_id)
 
         # First turn
         model.set_next_output([get_text_message("Hello")])
-        result1 = await Runner.run(agent, "Hi there", run_config=run_config)
+        result1 = await Runner.run(
+            agent, "Hi there", memory=memory, session_id=session_id
+        )
         assert result1.final_output == "Hello"
 
         # Second turn
         model.set_next_output([get_text_message("I remember you said hi")])
         result2 = await Runner.run(
-            agent, "Do you remember what I said?", run_config=run_config
+            agent, "Do you remember what I said?", memory=memory, session_id=session_id
         )
         assert result2.final_output == "I remember you said hi"
 
@@ -79,18 +84,14 @@ async def test_session_memory_disabled():
     model = FakeModel()
     agent = Agent(name="test", model=model)
 
-    run_config = RunConfig(memory=None)  # No session memory
-
-    # First turn
+    # First turn (no memory parameters = disabled)
     model.set_next_output([get_text_message("Hello")])
-    result1 = await Runner.run(agent, "Hi there", run_config=run_config)
+    result1 = await Runner.run(agent, "Hi there")
     assert result1.final_output == "Hello"
 
     # Second turn - should NOT have conversation history
     model.set_next_output([get_text_message("I don't remember")])
-    result2 = await Runner.run(
-        agent, "Do you remember what I said?", run_config=run_config
-    )
+    result2 = await Runner.run(agent, "Do you remember what I said?")
     assert result2.final_output == "I don't remember"
 
     # Verify that the input to the second turn is just the current message
@@ -110,24 +111,26 @@ async def test_session_memory_different_sessions():
 
         # Session 1
         session_id_1 = "session_1"
-        run_config_1 = RunConfig(memory=memory, session_id=session_id_1)
 
         model.set_next_output([get_text_message("I like cats")])
-        result1 = await Runner.run(agent, "I like cats", run_config=run_config_1)
+        result1 = await Runner.run(
+            agent, "I like cats", memory=memory, session_id=session_id_1
+        )
         assert result1.final_output == "I like cats"
 
         # Session 2 - different session
         session_id_2 = "session_2"
-        run_config_2 = RunConfig(memory=memory, session_id=session_id_2)
 
         model.set_next_output([get_text_message("I like dogs")])
-        result2 = await Runner.run(agent, "I like dogs", run_config=run_config_2)
+        result2 = await Runner.run(
+            agent, "I like dogs", memory=memory, session_id=session_id_2
+        )
         assert result2.final_output == "I like dogs"
 
         # Back to Session 1 - should remember cats, not dogs
         model.set_next_output([get_text_message("Yes, you mentioned cats")])
         result3 = await Runner.run(
-            agent, "What did I say I like?", run_config=run_config_1
+            agent, "What did I say I like?", memory=memory, session_id=session_id_1
         )
         assert result3.final_output == "Yes, you mentioned cats"
 
@@ -141,13 +144,11 @@ async def test_session_memory_no_session_id():
     agent = Agent(name="test", model=model)
     memory = SQLiteSessionMemory()
 
-    run_config = RunConfig(memory=memory)  # Memory enabled but no session_id
-
     # Should raise ValueError when trying to run with memory enabled but no session_id
     with pytest.raises(
         ValueError, match="session_id is required when memory is enabled"
     ):
-        await Runner.run(agent, "Hi there", run_config=run_config)
+        await Runner.run(agent, "Hi there", memory=memory)
 
 
 @pytest.mark.asyncio
@@ -157,13 +158,10 @@ async def test_session_id_without_memory():
     agent = Agent(name="test", model=model)
 
     session_id = "test_session_without_memory"
-    run_config = RunConfig(
-        memory=None, session_id=session_id
-    )  # session_id but no memory
 
     # Should raise ValueError when trying to run with session_id but no memory
     with pytest.raises(ValueError, match="session_id provided but memory is disabled"):
-        await Runner.run(agent, "Hi there", run_config=run_config)
+        await Runner.run(agent, "Hi there", session_id=session_id)
 
 
 @pytest.mark.asyncio
@@ -296,10 +294,3 @@ async def test_session_memory_pop_different_sessions():
         assert session_2_messages[0]["content"] == "Session 2 message 1"
 
         memory.close()
-
-
-def test_session_memory_invalid_config():
-    """Test that invalid memory configuration raises ValueError."""
-    with pytest.raises(ValueError, match="Invalid memory configuration"):
-        run_config = RunConfig(memory="invalid")
-        Runner._get_session_memory(run_config)

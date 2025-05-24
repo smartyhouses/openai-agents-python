@@ -111,13 +111,6 @@ class RunConfig:
     An optional dictionary of additional metadata to include with the trace.
     """
 
-    memory: SessionMemory | None = None
-    """
-    Session memory instance for conversation history persistence.
-    - None (default): No session memory
-    - SessionMemory instance: Use the provided session memory implementation
-    """
-
     session_id: str | None = None
     """
     A session identifier for memory persistence. Required when memory is enabled.
@@ -137,6 +130,8 @@ class Runner:
         hooks: RunHooks[TContext] | None = None,
         run_config: RunConfig | None = None,
         previous_response_id: str | None = None,
+        memory: SessionMemory | None = None,
+        session_id: str | None = None,
     ) -> RunResult:
         """Run a workflow starting at the given agent. The agent will run in a loop until a final
         output is generated. The loop runs like so:
@@ -163,6 +158,10 @@ class Runner:
             run_config: Global settings for the entire agent run.
             previous_response_id: The ID of the previous response, if using OpenAI models via the
                 Responses API, this allows you to skip passing in input from the previous turn.
+            memory: Session memory instance for conversation history persistence.
+                If None, no conversation history will be maintained.
+            session_id: A session identifier for memory persistence. Required when memory is provided.
+                Conversation history will be automatically managed using this session ID.
 
         Returns:
             A run result containing all the inputs, guardrail results and the output of the last
@@ -175,7 +174,7 @@ class Runner:
 
         # Prepare input with session memory if enabled
         prepared_input, session_memory = await cls._prepare_input_with_memory(
-            input, run_config
+            input, memory, session_id
         )
 
         tool_use_tracker = AgentToolUseTracker()
@@ -304,7 +303,7 @@ class Runner:
 
                         # Save the conversation to session memory if enabled
                         await cls._save_result_to_memory(
-                            session_memory, run_config.session_id, input, result
+                            session_memory, session_id, input, result
                         )
 
                         return result
@@ -336,6 +335,8 @@ class Runner:
         hooks: RunHooks[TContext] | None = None,
         run_config: RunConfig | None = None,
         previous_response_id: str | None = None,
+        memory: SessionMemory | None = None,
+        session_id: str | None = None,
     ) -> RunResult:
         """Run a workflow synchronously, starting at the given agent. Note that this just wraps the
         `run` method, so it will not work if there's already an event loop (e.g. inside an async
@@ -366,6 +367,10 @@ class Runner:
             run_config: Global settings for the entire agent run.
             previous_response_id: The ID of the previous response, if using OpenAI models via the
                 Responses API, this allows you to skip passing in input from the previous turn.
+            memory: Session memory instance for conversation history persistence.
+                If None, no conversation history will be maintained.
+            session_id: A session identifier for memory persistence. Required when memory is provided.
+                Conversation history will be automatically managed using this session ID.
 
         Returns:
             A run result containing all the inputs, guardrail results and the output of the last
@@ -380,6 +385,8 @@ class Runner:
                 hooks=hooks,
                 run_config=run_config,
                 previous_response_id=previous_response_id,
+                memory=memory,
+                session_id=session_id,
             )
         )
 
@@ -393,6 +400,8 @@ class Runner:
         hooks: RunHooks[TContext] | None = None,
         run_config: RunConfig | None = None,
         previous_response_id: str | None = None,
+        memory: SessionMemory | None = None,
+        session_id: str | None = None,
     ) -> RunResultStreaming:
         """Run a workflow starting at the given agent in streaming mode. The returned result object
         contains a method you can use to stream semantic events as they are generated.
@@ -421,6 +430,10 @@ class Runner:
             run_config: Global settings for the entire agent run.
             previous_response_id: The ID of the previous response, if using OpenAI models via the
                 Responses API, this allows you to skip passing in input from the previous turn.
+            memory: Session memory instance for conversation history persistence.
+                If None, no conversation history will be maintained.
+            session_id: A session identifier for memory persistence. Required when memory is provided.
+                Conversation history will be automatically managed using this session ID.
         Returns:
             A result object that contains data about the run, as well as a method to stream events.
         """
@@ -476,6 +489,8 @@ class Runner:
                 context_wrapper=context_wrapper,
                 run_config=run_config,
                 previous_response_id=previous_response_id,
+                memory=memory,
+                session_id=session_id,
             )
         )
         return streamed_result
@@ -534,13 +549,15 @@ class Runner:
         context_wrapper: RunContextWrapper[TContext],
         run_config: RunConfig,
         previous_response_id: str | None,
+        memory: SessionMemory | None,
+        session_id: str | None,
     ):
         if streamed_result.trace:
             streamed_result.trace.start(mark_as_current=True)
 
         # Prepare input with session memory if enabled
         prepared_input, session_memory = await cls._prepare_input_with_memory(
-            starting_input, run_config
+            starting_input, memory, session_id
         )
 
         # Update the streamed result with the prepared input
@@ -677,10 +694,7 @@ class Runner:
                             context_wrapper=context_wrapper,
                         )
                         await cls._save_result_to_memory(
-                            session_memory,
-                            run_config.session_id,
-                            starting_input,
-                            temp_result,
+                            session_memory, session_id, starting_input, temp_result
                         )
 
                         streamed_result._event_queue.put_nowait(QueueCompleteSentinel())
@@ -1057,40 +1071,30 @@ class Runner:
         return run_config.model_provider.get_model(agent.model)
 
     @classmethod
-    def _get_session_memory(cls, run_config: RunConfig) -> SessionMemory | None:
-        """Get the session memory instance from run config, if any."""
-        if run_config.memory is None:
-            return None
-        elif isinstance(run_config.memory, SessionMemory):
-            return run_config.memory
-        else:
-            raise ValueError(f"Invalid memory configuration: {run_config.memory}")
-
-    @classmethod
     async def _prepare_input_with_memory(
         cls,
         input: str | list[TResponseInputItem],
-        run_config: RunConfig,
+        memory: SessionMemory | None,
+        session_id: str | None,
     ) -> tuple[str | list[TResponseInputItem], SessionMemory | None]:
         """Prepare input by combining it with session memory if enabled."""
-        memory = cls._get_session_memory(run_config)
         if memory is None:
             # Check if session_id is provided without memory
-            if run_config.session_id is not None:
+            if session_id is not None:
                 raise ValueError(
                     "session_id provided but memory is disabled. "
-                    "Please enable memory in the RunConfig or remove session_id."
+                    "Please provide a memory instance or remove session_id."
                 )
             return input, memory
 
-        if run_config.session_id is None:
+        if session_id is None:
             raise ValueError(
                 "session_id is required when memory is enabled. "
-                "Please provide a session_id in the RunConfig."
+                "Please provide a session_id."
             )
 
         # Get previous conversation history
-        history = await memory.get_messages(run_config.session_id)
+        history = await memory.get_messages(session_id)
 
         # Convert input to list format
         new_input_list = ItemHelpers.input_to_new_input_list(input)
