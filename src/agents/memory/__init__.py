@@ -1,3 +1,3 @@
-from .session_memory import SessionMemory, SQLiteSessionMemory
+from .session_memory import Session, SQLiteSession, SessionMemory, SQLiteSessionMemory
 
-__all__ = ["SessionMemory", "SQLiteSessionMemory"]
+__all__ = ["Session", "SQLiteSession", "SessionMemory", "SQLiteSessionMemory"]

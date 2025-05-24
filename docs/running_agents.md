@@ -49,8 +49,6 @@ The `run_config` parameter lets you configure some global settings for the agent
 -   [`model`][agents.run.RunConfig.model]: Allows setting a global LLM model to use, irrespective of what `model` each Agent has.
 -   [`model_provider`][agents.run.RunConfig.model_provider]: A model provider for looking up model names, which defaults to OpenAI.
 -   [`model_settings`][agents.run.RunConfig.model_settings]: Overrides agent-specific settings. For example, you can set a global `temperature` or `top_p`.
--   [`memory`][agents.run.RunConfig.memory]: Session memory instance for automatic conversation history management. See [Session Memory](session_memory.md) for details.
--   [`session_id`][agents.run.RunConfig.session_id]: Unique identifier for the conversation session. Required when `memory` is enabled.
 -   [`input_guardrails`][agents.run.RunConfig.input_guardrails], [`output_guardrails`][agents.run.RunConfig.output_guardrails]: A list of input or output guardrails to include on all runs.
 -   [`handoff_input_filter`][agents.run.RunConfig.handoff_input_filter]: A global input filter to apply to all handoffs, if the handoff doesn't already have one. The input filter allows you to edit the inputs that are sent to the new agent. See the documentation in [`Handoff.input_filter`][agents.handoffs.Handoff.input_filter] for more details.
 -   [`tracing_disabled`][agents.run.RunConfig.tracing_disabled]: Allows you to disable [tracing](tracing.md) for the entire run.
@@ -93,23 +91,22 @@ async def main():
 For a simpler approach, you can use [Session Memory](session_memory.md) to automatically handle conversation history without manually calling `.to_input_list()`:
 
 ```python
-from agents import Agent, Runner, RunConfig, SQLiteSessionMemory
+from agents import Agent, Runner, SQLiteSession
 
 async def main():
     agent = Agent(name="Assistant", instructions="Reply very concisely.")
 
-    # Create session memory and run config
-    memory = SQLiteSessionMemory()
-    run_config = RunConfig(memory=memory, session_id="conversation_123")
+    # Create session instance
+    session = SQLiteSession("conversation_123")
 
     with trace(workflow_name="Conversation", group_id=thread_id):
         # First turn
-        result = await Runner.run(agent, "What city is the Golden Gate Bridge in?", run_config=run_config)
+        result = await Runner.run(agent, "What city is the Golden Gate Bridge in?", session=session)
         print(result.final_output)
         # San Francisco
 
         # Second turn - agent automatically remembers previous context
-        result = await Runner.run(agent, "What state is it in?", run_config=run_config)
+        result = await Runner.run(agent, "What state is it in?", session=session)
         print(result.final_output)
         # California
 ```

@@ -39,7 +39,7 @@ from .items import (
     TResponseInputItem,
 )
 from .lifecycle import AgentHooks, RunHooks
-from .memory import SessionMemory, SQLiteSessionMemory
+from .memory import Session, SQLiteSession, SessionMemory, SQLiteSessionMemory
 from .model_settings import ModelSettings
 from .models.interface import Model, ModelProvider, ModelTracing
 from .models.openai_chatcompletions import OpenAIChatCompletionsModel
@@ -205,6 +205,8 @@ __all__ = [
     "ItemHelpers",
     "RunHooks",
     "AgentHooks",
+    "Session",
+    "SQLiteSession",
     "SessionMemory",
     "SQLiteSessionMemory",
     "RunContextWrapper",

@@ -12,57 +12,44 @@ if TYPE_CHECKING:
 
 
 @runtime_checkable
-class SessionMemory(Protocol):
-    """Protocol for session memory implementations.
+class Session(Protocol):
+    """Protocol for session implementations.
 
-    Session memory stores conversation history across agent runs, allowing
+    Session stores conversation history for a specific session, allowing
     agents to maintain context without requiring explicit manual memory management.
     """
 
-    async def get_messages(self, session_id: str) -> list[TResponseInputItem]:
-        """Retrieve the conversation history for a given session.
-
-        Args:
-            session_id: Unique identifier for the conversation session
+    async def get_messages(self) -> list[TResponseInputItem]:
+        """Retrieve the conversation history for this session.
 
         Returns:
             List of input items representing the conversation history
         """
         ...
 
-    async def add_messages(
-        self, session_id: str, messages: list[TResponseInputItem]
-    ) -> None:
+    async def add_messages(self, messages: list[TResponseInputItem]) -> None:
         """Add new messages to the conversation history.
 
         Args:
-            session_id: Unique identifier for the conversation session
             messages: List of input items to add to the history
         """
         ...
 
-    async def pop_message(self, session_id: str) -> TResponseInputItem | None:
+    async def pop_message(self) -> TResponseInputItem | None:
         """Remove and return the most recent message from the session.
-
-        Args:
-            session_id: Unique identifier for the conversation session
 
         Returns:
             The most recent message if it exists, None if the session is empty
         """
         ...
 
-    async def clear_session(self, session_id: str) -> None:
-        """Clear all messages for a given session.
-
-        Args:
-            session_id: Unique identifier for the conversation session
-        """
+    async def clear_session(self) -> None:
+        """Clear all messages for this session."""
         ...
 
 
-class SQLiteSessionMemory(SessionMemory):
-    """SQLite-based implementation of session memory.
+class SQLiteSession(Session):
+    """SQLite-based implementation of session storage.
 
     This implementation stores conversation history in a SQLite database.
     By default, uses an in-memory database that is lost when the process ends.
@@ -71,17 +58,20 @@ class SQLiteSessionMemory(SessionMemory):
 
     def __init__(
         self,
+        session_id: str,
         db_path: str | Path = ":memory:",
         sessions_table: str = "agent_sessions",
         messages_table: str = "agent_messages",
     ):
-        """Initialize the SQLite session memory.
+        """Initialize the SQLite session.
 
         Args:
+            session_id: Unique identifier for the conversation session
             db_path: Path to the SQLite database file. Defaults to ':memory:' (in-memory database)
             sessions_table: Name of the table to store session metadata. Defaults to 'agent_sessions'
             messages_table: Name of the table to store message data. Defaults to 'agent_messages'
         """
+        self.session_id = session_id
         self.db_path = db_path
         self.sessions_table = sessions_table
         self.messages_table = messages_table
@@ -152,11 +142,8 @@ class SQLiteSessionMemory(SessionMemory):
 
         conn.commit()
 
-    async def get_messages(self, session_id: str) -> list[TResponseInputItem]:
-        """Retrieve the conversation history for a given session.
-
-        Args:
-            session_id: Unique identifier for the conversation session
+    async def get_messages(self) -> list[TResponseInputItem]:
+        """Retrieve the conversation history for this session.
 
         Returns:
             List of input items representing the conversation history
@@ -171,7 +158,7 @@ class SQLiteSessionMemory(SessionMemory):
                     WHERE session_id = ? 
                     ORDER BY created_at ASC
                 """,
-                    (session_id,),
+                    (self.session_id,),
                 )
 
                 messages = []
@@ -187,13 +174,10 @@ class SQLiteSessionMemory(SessionMemory):
 
         return await asyncio.to_thread(_get_messages_sync)
 
-    async def add_messages(
-        self, session_id: str, messages: list[TResponseInputItem]
-    ) -> None:
+    async def add_messages(self, messages: list[TResponseInputItem]) -> None:
         """Add new messages to the conversation history.
 
         Args:
-            session_id: Unique identifier for the conversation session
             messages: List of input items to add to the history
         """
         if not messages:
@@ -208,12 +192,12 @@ class SQLiteSessionMemory(SessionMemory):
                     f"""
                     INSERT OR IGNORE INTO {self.sessions_table} (session_id) VALUES (?)
                 """,
-                    (session_id,),
+                    (self.session_id,),
                 )
 
                 # Add messages
                 message_data = [
-                    (session_id, json.dumps(message)) for message in messages
+                    (self.session_id, json.dumps(message)) for message in messages
                 ]
                 conn.executemany(
                     f"""
@@ -227,18 +211,15 @@ class SQLiteSessionMemory(SessionMemory):
                     f"""
                     UPDATE {self.sessions_table} SET updated_at = CURRENT_TIMESTAMP WHERE session_id = ?
                 """,
-                    (session_id,),
+                    (self.session_id,),
                 )
 
                 conn.commit()
 
         await asyncio.to_thread(_add_messages_sync)
 
-    async def pop_message(self, session_id: str) -> TResponseInputItem | None:
+    async def pop_message(self) -> TResponseInputItem | None:
         """Remove and return the most recent message from the session.
-
-        Args:
-            session_id: Unique identifier for the conversation session
 
         Returns:
             The most recent message if it exists, None if the session is empty
@@ -254,7 +235,7 @@ class SQLiteSessionMemory(SessionMemory):
                     ORDER BY created_at DESC
                     LIMIT 1
                 """,
-                    (session_id,),
+                    (self.session_id,),
                 )
 
                 result = cursor.fetchone()
@@ -286,23 +267,19 @@ class SQLiteSessionMemory(SessionMemory):
 
         return await asyncio.to_thread(_pop_message_sync)
 
-    async def clear_session(self, session_id: str) -> None:
-        """Clear all messages for a given session.
-
-        Args:
-            session_id: Unique identifier for the conversation session
-        """
+    async def clear_session(self) -> None:
+        """Clear all messages for this session."""
 
         def _clear_session_sync():
             conn = self._get_connection()
             with self._lock if self._is_memory_db else threading.Lock():
                 conn.execute(
                     f"DELETE FROM {self.messages_table} WHERE session_id = ?",
-                    (session_id,),
+                    (self.session_id,),
                 )
                 conn.execute(
                     f"DELETE FROM {self.sessions_table} WHERE session_id = ?",
-                    (session_id,),
+                    (self.session_id,),
                 )
                 conn.commit()
 
@@ -316,3 +293,8 @@ class SQLiteSessionMemory(SessionMemory):
         else:
             if hasattr(self._local, "connection"):
                 self._local.connection.close()
+
+
+# Legacy aliases for backwards compatibility
+SessionMemory = Session
+SQLiteSessionMemory = SQLiteSession

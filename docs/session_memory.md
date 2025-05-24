@@ -2,12 +2,12 @@
 
 The Agents SDK provides built-in session memory to automatically maintain conversation history across multiple agent runs, eliminating the need to manually handle `.to_input_list()` between turns.
 
-Session memory stores conversation history across agent runs, allowing agents to maintain context without requiring explicit manual memory management. This is particularly useful for building chat applications or multi-turn conversations where you want the agent to remember previous interactions.
+Session memory stores conversation history for a specific session, allowing agents to maintain context without requiring explicit manual memory management. This is particularly useful for building chat applications or multi-turn conversations where you want the agent to remember previous interactions.
 
 ## Quick start
 
 ```python
-from agents import Agent, Runner, SQLiteSessionMemory
+from agents import Agent, Runner, SQLiteSession
 
 # Create agent
 agent = Agent(
@@ -15,15 +15,14 @@ agent = Agent(
     instructions="Reply very concisely.",
 )
 
-# Create a session memory instance
-memory = SQLiteSessionMemory()
+# Create a session instance with a session ID
+session = SQLiteSession("conversation_123")
 
 # First turn
 result = await Runner.run(
     agent,
     "What city is the Golden Gate Bridge in?",
-    memory=memory,
-    session_id="conversation_123"
+    session=session
 )
 print(result.final_output)  # "San Francisco"
 
@@ -31,8 +30,7 @@ print(result.final_output)  # "San Francisco"
 result = await Runner.run(
     agent,
     "What state is it in?",
-    memory=memory,
-    session_id="conversation_123"
+    session=session
 )
 print(result.final_output)  # "California"
 
@@ -40,8 +38,7 @@ print(result.final_output)  # "California"
 result = Runner.run_sync(
     agent,
     "What's the population?",
-    memory=memory,
-    session_id="conversation_123"
+    session=session
 )
 print(result.final_output)  # "Approximately 39 million"
 ```
@@ -50,9 +47,9 @@ print(result.final_output)  # "Approximately 39 million"
 
 When session memory is enabled:
 
-1. **Before each run**: The runner automatically retrieves the conversation history for the given `session_id` and prepends it to the input messages.
-2. **After each run**: All new messages generated during the run (user input, assistant responses, tool calls, etc.) are automatically stored in the session memory.
-3. **Context preservation**: Each subsequent run in the same session includes the full conversation history, allowing the agent to maintain context.
+1. **Before each run**: The runner automatically retrieves the conversation history for the session and prepends it to the input messages.
+2. **After each run**: All new messages generated during the run (user input, assistant responses, tool calls, etc.) are automatically stored in the session.
+3. **Context preservation**: Each subsequent run with the same session includes the full conversation history, allowing the agent to maintain context.
 
 This eliminates the need to manually call `.to_input_list()` and manage conversation state between runs.
 
@@ -63,27 +60,26 @@ This eliminates the need to manually call `.to_input_list()` and manage conversa
 Session memory supports several operations for managing conversation history:
 
 ```python
-from agents import SQLiteSessionMemory
+from agents import SQLiteSession
 
-memory = SQLiteSessionMemory("conversations.db")
-session_id = "user_123"
+session = SQLiteSession("user_123", "conversations.db")
 
 # Get all messages in a session
-messages = await memory.get_messages(session_id)
+messages = await session.get_messages()
 
 # Add new messages to a session
 new_messages = [
     {"role": "user", "content": "Hello"},
     {"role": "assistant", "content": "Hi there!"}
 ]
-await memory.add_messages(session_id, new_messages)
+await session.add_messages(new_messages)
 
 # Remove and return the most recent message
-last_message = await memory.pop_message(session_id)
+last_message = await session.pop_message()
 print(last_message)  # {"role": "assistant", "content": "Hi there!"}
 
 # Clear all messages from a session
-await memory.clear_session(session_id)
+await session.clear_session()
 ```
 
 ### Using pop_message for corrections
@@ -91,31 +87,28 @@ await memory.clear_session(session_id)
 The `pop_message` method is particularly useful when you want to undo or modify the last message in a conversation:
 
 ```python
-from agents import Agent, Runner, SQLiteSessionMemory
+from agents import Agent, Runner, SQLiteSession
 
 agent = Agent(name="Assistant")
-memory = SQLiteSessionMemory()
-session_id = "correction_example"
+session = SQLiteSession("correction_example")
 
 # Initial conversation
 result = await Runner.run(
     agent,
     "What's 2 + 2?",
-    memory=memory,
-    session_id=session_id
+    session=session
 )
 print(f"Agent: {result.final_output}")
 
 # User wants to correct their question
-user_message = await memory.pop_message(session_id)  # Remove user's question
-assistant_message = await memory.pop_message(session_id)  # Remove agent's response
+user_message = await session.pop_message()  # Remove user's question
+assistant_message = await session.pop_message()  # Remove agent's response
 
 # Ask a corrected question
 result = await Runner.run(
     agent,
     "What's 2 + 3?",
-    memory=memory,
-    session_id=session_id
+    session=session
 )
 print(f"Agent: {result.final_output}")
 ```
@@ -132,111 +125,89 @@ result = await Runner.run(agent, "Hello")
 ### SQLite memory
 
 ```python
-from agents import SQLiteSessionMemory
+from agents import SQLiteSession
 
 # In-memory database (lost when process ends)
-memory = SQLiteSessionMemory()
+session = SQLiteSession("user_123")
 
 # Persistent file-based database
-memory = SQLiteSessionMemory("conversations.db")
+session = SQLiteSession("user_123", "conversations.db")
 
-# Use the memory with session IDs
+# Use the session
 result = await Runner.run(
     agent,
     "Hello",
-    memory=memory,
-    session_id="user_123"
+    session=session
 )
 ```
 
 ### Multiple sessions
 
 ```python
-from agents import Agent, Runner, SQLiteSessionMemory
+from agents import Agent, Runner, SQLiteSession
 
-memory = SQLiteSessionMemory("conversations.db")
 agent = Agent(name="Assistant")
 
-# Different session IDs maintain separate conversation histories
+# Different sessions maintain separate conversation histories
+session_1 = SQLiteSession("user_123", "conversations.db")
+session_2 = SQLiteSession("user_456", "conversations.db")
+
 result1 = await Runner.run(
     agent,
     "Hello",
-    memory=memory,
-    session_id="user_123"
+    session=session_1
 )
 result2 = await Runner.run(
     agent,
     "Hello",
-    memory=memory,
-    session_id="user_456"
+    session=session_2
 )
 ```
 
 ## Custom memory implementations
 
-You can implement your own session memory by creating a class that follows the [`SessionMemory`][agents.memory.session_memory.SessionMemory] protocol:
+You can implement your own session memory by creating a class that follows the [`Session`][agents.memory.session_memory.Session] protocol:
 
 ````python
-from agents.memory import SessionMemory
+from agents.memory import Session
 from typing import List
 
-class MyCustomMemory:
-    """Custom memory implementation following the SessionMemory protocol."""
+class MyCustomSession:
+    """Custom session implementation following the Session protocol."""
 
-    async def get_messages(self, session_id: str) -> List[dict]:
-        """Retrieve conversation history for the session."""
+    def __init__(self, session_id: str):
+        self.session_id = session_id
+        # Your initialization here
+
+    async def get_messages(self) -> List[dict]:
+        """Retrieve conversation history for this session."""
         # Your implementation here
         pass
 
-    async def add_messages(self, session_id: str, messages: List[dict]) -> None:
-        """Store new messages for the session."""
+    async def add_messages(self, messages: List[dict]) -> None:
+        """Store new messages for this session."""
         # Your implementation here
         pass
 
-    async def pop_message(self, session_id: str) -> dict | None:
-        """Remove and return the most recent message from the session."""
+    async def pop_message(self) -> dict | None:
+        """Remove and return the most recent message from this session."""
         # Your implementation here
         pass
 
-    async def clear_session(self, session_id: str) -> None:
-        """Clear all messages for the session."""
+    async def clear_session(self) -> None:
+        """Clear all messages for this session."""
         # Your implementation here
         pass
 
-# Use your custom memory
+# Use your custom session
 agent = Agent(name="Assistant")
 result = await Runner.run(
     agent,
     "Hello",
-    memory=MyCustomMemory(),
-    session_id="my_session"
+    session=MyCustomSession("my_session")
 )
 
-## Requirements and validation
-
-### session_id requirement
-
-When session memory is enabled, you **must** provide a `session_id`. If you don't, the runner will raise a `ValueError`:
-
-```python
-from agents import Agent, Runner, SQLiteSessionMemory
-
-agent = Agent(name="Assistant")
-memory = SQLiteSessionMemory()
-
-# This will raise ValueError: "session_id is required when memory is enabled"
-result = await Runner.run(agent, "Hello", memory=memory)
-
-# This works correctly
-result = await Runner.run(
-    agent,
-    "Hello",
-    memory=memory,
-    session_id="my_session"
-)
-```
-
-## Best practices
+## Session management
 
 ### Session ID naming
 
@@ -248,32 +219,31 @@ Use meaningful session IDs that help you organize conversations:
 
 ### Memory persistence
 
--   Use in-memory SQLite (`SQLiteSessionMemory()`) for temporary conversations
--   Use file-based SQLite (`SQLiteSessionMemory("path/to/db.sqlite")`) for persistent conversations
--   Consider implementing custom memory backends for production systems (Redis, PostgreSQL, etc.)
+-   Use in-memory SQLite (`SQLiteSession("session_id")`) for temporary conversations
+-   Use file-based SQLite (`SQLiteSession("session_id", "path/to/db.sqlite")`) for persistent conversations
+-   Consider implementing custom session backends for production systems (Redis, PostgreSQL, etc.)
 
 ### Session management
 
 ```python
 # Clear a session when conversation should start fresh
-await memory.clear_session("user_123")
+await session.clear_session()
 
-# Different agents can share the same session memory
+# Different agents can share the same session
 support_agent = Agent(name="Support")
 billing_agent = Agent(name="Billing")
+session = SQLiteSession("user_123")
 
 # Both agents will see the same conversation history
 result1 = await Runner.run(
     support_agent,
     "Help me with my account",
-    memory=memory,
-    session_id="user_123"
+    session=session
 )
 result2 = await Runner.run(
     billing_agent,
     "What are my charges?",
-    memory=memory,
-    session_id="user_123"
+    session=session
 )
 ```
 
@@ -283,7 +253,7 @@ Here's a complete example showing session memory in action:
 
 ```python
 import asyncio
-from agents import Agent, Runner, SQLiteSessionMemory
+from agents import Agent, Runner, SQLiteSession
 
 
 async def main():
@@ -293,11 +263,8 @@ async def main():
         instructions="Reply very concisely.",
     )
 
-    # Create a session memory instance that will persist across runs
-    memory = SQLiteSessionMemory("conversation_history.db")
-
-    # Define a session ID for this conversation
-    session_id = "conversation_123"
+    # Create a session instance that will persist across runs
+    session = SQLiteSession("conversation_123", "conversation_history.db")
 
     print("=== Session Memory Example ===")
     print("The agent will remember previous messages automatically.\n")
@@ -308,8 +275,7 @@ async def main():
     result = await Runner.run(
         agent,
         "What city is the Golden Gate Bridge in?",
-        memory=memory,
-        session_id=session_id
+        session=session
     )
     print(f"Assistant: {result.final_output}")
     print()
@@ -320,8 +286,7 @@ async def main():
     result = await Runner.run(
         agent,
         "What state is it in?",
-        memory=memory,
-        session_id=session_id
+        session=session
     )
     print(f"Assistant: {result.final_output}")
     print()
@@ -332,8 +297,7 @@ async def main():
     result = await Runner.run(
         agent,
         "What's the population of that state?",
-        memory=memory,
-        session_id=session_id
+        session=session
     )
     print(f"Assistant: {result.final_output}")
     print()
@@ -351,8 +315,7 @@ if __name__ == "__main__":
 
 For detailed API documentation, see:
 
--   [`SessionMemory`][agents.memory.SessionMemory] - Protocol interface
--   [`SQLiteSessionMemory`][agents.memory.SQLiteSessionMemory] - SQLite implementation
--   [`RunConfig.memory`][agents.run.RunConfig.memory] - Run configuration
--   [`RunConfig.session_id`][agents.run.RunConfig.session_id] - Session identifier
+-   [`Session`][agents.memory.Session] - Protocol interface
+-   [`SQLiteSession`][agents.memory.SQLiteSession] - SQLite implementation
+-   [`RunConfig.session`][agents.run.RunConfig.session] - Run configuration
 ````

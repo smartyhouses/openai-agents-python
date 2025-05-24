@@ -37,7 +37,7 @@ from .handoffs import Handoff, HandoffInputFilter, handoff
 from .items import ItemHelpers, ModelResponse, RunItem, TResponseInputItem
 from .lifecycle import RunHooks
 from .logger import logger
-from .memory import SessionMemory, SQLiteSessionMemory
+from .memory import Session
 from .model_settings import ModelSettings
 from .models.interface import Model, ModelProvider
 from .models.multi_provider import MultiProvider
@@ -111,12 +111,6 @@ class RunConfig:
     An optional dictionary of additional metadata to include with the trace.
     """
 
-    session_id: str | None = None
-    """
-    A session identifier for memory persistence. Required when memory is enabled.
-    Conversation history will be automatically managed using this session ID.
-    """
-
 
 class Runner:
     @classmethod
@@ -130,8 +124,7 @@ class Runner:
         hooks: RunHooks[TContext] | None = None,
         run_config: RunConfig | None = None,
         previous_response_id: str | None = None,
-        memory: SessionMemory | None = None,
-        session_id: str | None = None,
+        session: Session | None = None,
     ) -> RunResult:
         """Run a workflow starting at the given agent. The agent will run in a loop until a final
         output is generated. The loop runs like so:
@@ -158,10 +151,8 @@ class Runner:
             run_config: Global settings for the entire agent run.
             previous_response_id: The ID of the previous response, if using OpenAI models via the
                 Responses API, this allows you to skip passing in input from the previous turn.
-            memory: Session memory instance for conversation history persistence.
+            session: Session instance for conversation history persistence.
                 If None, no conversation history will be maintained.
-            session_id: A session identifier for memory persistence. Required when memory is provided.
-                Conversation history will be automatically managed using this session ID.
 
         Returns:
             A run result containing all the inputs, guardrail results and the output of the last
@@ -172,10 +163,8 @@ class Runner:
         if run_config is None:
             run_config = RunConfig()
 
-        # Prepare input with session memory if enabled
-        prepared_input, session_memory = await cls._prepare_input_with_memory(
-            input, memory, session_id
-        )
+        # Prepare input with session if enabled
+        prepared_input = await cls._prepare_input_with_session(input, session)
 
         tool_use_tracker = AgentToolUseTracker()
 
@@ -301,10 +290,8 @@ class Runner:
                             context_wrapper=context_wrapper,
                         )
 
-                        # Save the conversation to session memory if enabled
-                        await cls._save_result_to_memory(
-                            session_memory, session_id, input, result
-                        )
+                        # Save the conversation to session if enabled
+                        await cls._save_result_to_session(session, input, result)
 
                         return result
                     elif isinstance(turn_result.next_step, NextStepHandoff):
@@ -335,8 +322,7 @@ class Runner:
         hooks: RunHooks[TContext] | None = None,
         run_config: RunConfig | None = None,
         previous_response_id: str | None = None,
-        memory: SessionMemory | None = None,
-        session_id: str | None = None,
+        session: Session | None = None,
     ) -> RunResult:
         """Run a workflow synchronously, starting at the given agent. Note that this just wraps the
         `run` method, so it will not work if there's already an event loop (e.g. inside an async
@@ -367,10 +353,8 @@ class Runner:
             run_config: Global settings for the entire agent run.
             previous_response_id: The ID of the previous response, if using OpenAI models via the
                 Responses API, this allows you to skip passing in input from the previous turn.
-            memory: Session memory instance for conversation history persistence.
+            session: Session instance for conversation history persistence.
                 If None, no conversation history will be maintained.
-            session_id: A session identifier for memory persistence. Required when memory is provided.
-                Conversation history will be automatically managed using this session ID.
 
         Returns:
             A run result containing all the inputs, guardrail results and the output of the last
@@ -385,8 +369,7 @@ class Runner:
                 hooks=hooks,
                 run_config=run_config,
                 previous_response_id=previous_response_id,
-                memory=memory,
-                session_id=session_id,
+                session=session,
             )
         )
 
@@ -400,8 +383,7 @@ class Runner:
         hooks: RunHooks[TContext] | None = None,
         run_config: RunConfig | None = None,
         previous_response_id: str | None = None,
-        memory: SessionMemory | None = None,
-        session_id: str | None = None,
+        session: Session | None = None,
     ) -> RunResultStreaming:
         """Run a workflow starting at the given agent in streaming mode. The returned result object
         contains a method you can use to stream semantic events as they are generated.
@@ -430,10 +412,8 @@ class Runner:
             run_config: Global settings for the entire agent run.
             previous_response_id: The ID of the previous response, if using OpenAI models via the
                 Responses API, this allows you to skip passing in input from the previous turn.
-            memory: Session memory instance for conversation history persistence.
+            session: Session instance for conversation history persistence.
                 If None, no conversation history will be maintained.
-            session_id: A session identifier for memory persistence. Required when memory is provided.
-                Conversation history will be automatically managed using this session ID.
         Returns:
             A result object that contains data about the run, as well as a method to stream events.
         """
@@ -489,8 +469,7 @@ class Runner:
                 context_wrapper=context_wrapper,
                 run_config=run_config,
                 previous_response_id=previous_response_id,
-                memory=memory,
-                session_id=session_id,
+                session=session,
             )
         )
         return streamed_result
@@ -549,8 +528,7 @@ class Runner:
         context_wrapper: RunContextWrapper[TContext],
         run_config: RunConfig,
         previous_response_id: str | None,
-        memory: SessionMemory | None,
-        session_id: str | None,
+        session: Session | None,
     ):
         current_span: Span[AgentSpanData] | None = None
 
@@ -558,9 +536,9 @@ class Runner:
             if streamed_result.trace:
                 streamed_result.trace.start(mark_as_current=True)
 
-            # Prepare input with session memory if enabled
-            prepared_input, session_memory = await cls._prepare_input_with_memory(
-                starting_input, memory, session_id
+            # Prepare input with session if enabled
+            prepared_input = await cls._prepare_input_with_session(
+                starting_input, session
             )
 
             # Update the streamed result with the prepared input
@@ -685,8 +663,8 @@ class Runner:
                             streamed_result.final_output = turn_result.next_step.output
                             streamed_result.is_complete = True
 
-                            # Save the conversation to session memory if enabled
-                            # Create a temporary RunResult for memory saving
+                            # Save the conversation to session if enabled
+                            # Create a temporary RunResult for session saving
                             temp_result = RunResult(
                                 input=streamed_result.input,
                                 new_items=streamed_result.new_items,
@@ -697,8 +675,8 @@ class Runner:
                                 output_guardrail_results=streamed_result.output_guardrail_results,
                                 context_wrapper=context_wrapper,
                             )
-                            await cls._save_result_to_memory(
-                                session_memory, session_id, starting_input, temp_result
+                            await cls._save_result_to_session(
+                                session, starting_input, temp_result
                             )
 
                             streamed_result._event_queue.put_nowait(
@@ -1084,30 +1062,17 @@ class Runner:
         return run_config.model_provider.get_model(agent.model)
 
     @classmethod
-    async def _prepare_input_with_memory(
+    async def _prepare_input_with_session(
         cls,
         input: str | list[TResponseInputItem],
-        memory: SessionMemory | None,
-        session_id: str | None,
-    ) -> tuple[str | list[TResponseInputItem], SessionMemory | None]:
-        """Prepare input by combining it with session memory if enabled."""
-        if memory is None:
-            # Check if session_id is provided without memory
-            if session_id is not None:
-                raise ValueError(
-                    "session_id provided but memory is disabled. "
-                    "Please provide a memory instance or remove session_id."
-                )
-            return input, memory
-
-        if session_id is None:
-            raise ValueError(
-                "session_id is required when memory is enabled. "
-                "Please provide a session_id."
-            )
+        session: Session | None,
+    ) -> str | list[TResponseInputItem]:
+        """Prepare input by combining it with session history if enabled."""
+        if session is None:
+            return input
 
         # Get previous conversation history
-        history = await memory.get_messages(session_id)
+        history = await session.get_messages()
 
         # Convert input to list format
         new_input_list = ItemHelpers.input_to_new_input_list(input)
@@ -1115,18 +1080,17 @@ class Runner:
         # Combine history with new input
         combined_input = history + new_input_list
 
-        return combined_input, memory
+        return combined_input
 
     @classmethod
-    async def _save_result_to_memory(
+    async def _save_result_to_session(
         cls,
-        memory: SessionMemory | None,
-        session_id: str | None,
+        session: Session | None,
         original_input: str | list[TResponseInputItem],
         result: RunResult,
     ) -> None:
-        """Save the conversation turn to session memory."""
-        if memory is None or session_id is None:
+        """Save the conversation turn to session."""
+        if session is None:
             return
 
         # Convert original input to list format if needed
@@ -1137,4 +1101,4 @@ class Runner:
 
         # Save all messages from this turn
         messages_to_save = input_list + new_items_as_input
-        await memory.add_messages(session_id, messages_to_save)
+        await session.add_messages(messages_to_save)

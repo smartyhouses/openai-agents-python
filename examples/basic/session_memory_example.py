@@ -6,7 +6,7 @@ across multiple agent runs without manually handling .to_input_list().
 """
 
 import asyncio
-from agents import Agent, Runner, SQLiteSessionMemory
+from agents import Agent, Runner, SQLiteSession
 
 
 async def main():
@@ -16,11 +16,9 @@ async def main():
         instructions="Reply very concisely.",
     )
 
-    # Create a session memory instance that will persist across runs
-    memory = SQLiteSessionMemory()
-
-    # Define a session ID for this conversation
+    # Create a session instance that will persist across runs
     session_id = "conversation_123"
+    session = SQLiteSession(session_id)
 
     print("=== Session Memory Example ===")
     print("The agent will remember previous messages automatically.\n")
@@ -31,8 +29,7 @@ async def main():
     result = await Runner.run(
         agent,
         "What city is the Golden Gate Bridge in?",
-        memory=memory,
-        session_id=session_id,
+        session=session,
     )
     print(f"Assistant: {result.final_output}")
     print()
@@ -40,9 +37,7 @@ async def main():
     # Second turn - the agent will remember the previous conversation
     print("Second turn:")
     print("User: What state is it in?")
-    result = await Runner.run(
-        agent, "What state is it in?", memory=memory, session_id=session_id
-    )
+    result = await Runner.run(agent, "What state is it in?", session=session)
     print(f"Assistant: {result.final_output}")
     print()
 
@@ -52,8 +47,7 @@ async def main():
     result = await Runner.run(
         agent,
         "What's the population of that state?",
-        memory=memory,
-        session_id=session_id,
+        session=session,
     )
     print(f"Assistant: {result.final_output}")
     print()
