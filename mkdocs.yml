@@ -57,7 +57,7 @@ plugins:
             - Documentation:
                 - agents.md
                 - running_agents.md
-                - session.md
+                - sessions.md
                 - results.md
                 - streaming.md
                 - tools.md
@@ -139,7 +139,7 @@ plugins:
             - ドキュメント:
                 - agents.md
                 - running_agents.md
-                - session.md
+                - sessions.md
                 - results.md
                 - streaming.md
                 - tools.md
