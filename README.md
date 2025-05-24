@@ -64,6 +64,47 @@ run_config_1 = RunConfig(session_id="user_123")
 run_config_2 = RunConfig(session_id="user_456")
 ```
 
+### Custom memory implementations
+
+You can implement your own session memory by creating a class that follows the `SessionMemory` protocol:
+
+```python
+from agents.memory import SessionMemory
+from typing import List
+
+class MyCustomMemory:
+    """Custom memory implementation following the SessionMemory protocol."""
+
+    async def get_messages(self, session_id: str) -> List[dict]:
+        # Retrieve conversation history for the session
+        pass
+
+    async def add_messages(self, session_id: str, messages: List[dict]) -> None:
+        # Store new messages for the session
+        pass
+
+    async def clear_session(self, session_id: str) -> None:
+        # Clear all messages for the session
+        pass
+
+# Use your custom memory
+agent = Agent(name="Assistant", memory=MyCustomMemory())
+```
+
+### Important: session_id requirement
+
+When session memory is enabled (either with `memory=True` or a custom `SessionMemory` implementation), you **must** provide a `session_id` in the `RunConfig`. If you don't, the runner will raise a `ValueError`:
+
+```python
+agent = Agent(name="Assistant", memory=True)
+
+# This will raise ValueError: "session_id is required when memory is enabled"
+result = await Runner.run(agent, "Hello", run_config=RunConfig())
+
+# This works correctly
+result = await Runner.run(agent, "Hello", run_config=RunConfig(session_id="my_session"))
+```
+
 ## Get started
 
 1. Set up your Python environment
