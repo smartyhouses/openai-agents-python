@@ -21,8 +21,12 @@ class Session(Protocol):
 
     session_id: str
 
-    async def get_messages(self) -> list[TResponseInputItem]:
+    async def get_messages(self, amount: int | None = None) -> list[TResponseInputItem]:
         """Retrieve the conversation history for this session.
+
+        Args:
+            amount: Maximum number of messages to retrieve. If None, retrieves all messages.
+                   When specified, returns the latest N messages in chronological order.
 
         Returns:
             List of input items representing the conversation history
@@ -144,8 +148,12 @@ class SQLiteSession(Session):
 
         conn.commit()
 
-    async def get_messages(self) -> list[TResponseInputItem]:
+    async def get_messages(self, amount: int | None = None) -> list[TResponseInputItem]:
         """Retrieve the conversation history for this session.
+
+        Args:
+            amount: Maximum number of messages to retrieve. If None, retrieves all messages.
+                   When specified, returns the latest N messages in chronological order.
 
         Returns:
             List of input items representing the conversation history
@@ -154,14 +162,40 @@ class SQLiteSession(Session):
         def _get_messages_sync():
             conn = self._get_connection()
             with self._lock if self._is_memory_db else threading.Lock():
-                cursor = conn.execute(
-                    f"""
-                    SELECT message_data FROM {self.messages_table} 
-                    WHERE session_id = ? 
-                    ORDER BY created_at ASC
-                """,
-                    (self.session_id,),
-                )
+                if amount is None:
+                    # Fetch all messages in chronological order
+                    cursor = conn.execute(
+                        f"""
+                        SELECT message_data FROM {self.messages_table} 
+                        WHERE session_id = ? 
+                        ORDER BY created_at ASC
+                    """,
+                        (self.session_id,),
+                    )
+                else:
+                    # Fetch the latest N messages in chronological order
+                    # First get the total count to calculate offset
+                    count_cursor = conn.execute(
+                        f"""
+                        SELECT COUNT(*) FROM {self.messages_table} 
+                        WHERE session_id = ?
+                    """,
+                        (self.session_id,),
+                    )
+                    total_count = count_cursor.fetchone()[0]
+
+                    # Calculate offset to get the latest N messages
+                    offset = max(0, total_count - amount)
+
+                    cursor = conn.execute(
+                        f"""
+                        SELECT message_data FROM {self.messages_table} 
+                        WHERE session_id = ? 
+                        ORDER BY created_at ASC
+                        LIMIT ? OFFSET ?
+                    """,
+                        (self.session_id, amount, offset),
+                    )
 
                 messages = []
                 for (message_data,) in cursor.fetchall():

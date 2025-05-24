@@ -321,6 +321,59 @@ async def test_session_memory_pop_different_sessions():
         session_2.close()
 
 
+@pytest.mark.asyncio
+async def test_sqlite_session_get_messages_with_amount():
+    """Test SQLiteSession get_messages with amount parameter."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        db_path = Path(temp_dir) / "test_amount.db"
+        session_id = "amount_test"
+        session = SQLiteSession(session_id, db_path)
+
+        # Add multiple messages
+        messages = [
+            {"role": "user", "content": "Message 1"},
+            {"role": "assistant", "content": "Response 1"},
+            {"role": "user", "content": "Message 2"},
+            {"role": "assistant", "content": "Response 2"},
+            {"role": "user", "content": "Message 3"},
+            {"role": "assistant", "content": "Response 3"},
+        ]
+
+        await session.add_messages(messages)
+
+        # Test getting all messages (default behavior)
+        all_messages = await session.get_messages()
+        assert len(all_messages) == 6
+        assert all_messages[0]["content"] == "Message 1"
+        assert all_messages[-1]["content"] == "Response 3"
+
+        # Test getting latest 2 messages
+        latest_2 = await session.get_messages(amount=2)
+        assert len(latest_2) == 2
+        assert latest_2[0]["content"] == "Message 3"
+        assert latest_2[1]["content"] == "Response 3"
+
+        # Test getting latest 4 messages
+        latest_4 = await session.get_messages(amount=4)
+        assert len(latest_4) == 4
+        assert latest_4[0]["content"] == "Message 2"
+        assert latest_4[1]["content"] == "Response 2"
+        assert latest_4[2]["content"] == "Message 3"
+        assert latest_4[3]["content"] == "Response 3"
+
+        # Test getting more messages than available
+        latest_10 = await session.get_messages(amount=10)
+        assert len(latest_10) == 6  # Should return all available messages
+        assert latest_10[0]["content"] == "Message 1"
+        assert latest_10[-1]["content"] == "Response 3"
+
+        # Test getting 0 messages
+        latest_0 = await session.get_messages(amount=0)
+        assert len(latest_0) == 0
+
+        session.close()
+
+
 # Original non-parametrized tests for backwards compatibility
 @pytest.mark.asyncio
 async def test_session_memory_basic_functionality():
