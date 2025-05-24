@@ -86,7 +86,6 @@ class SQLiteSessionMemory(SessionMemory):
         self.sessions_table = sessions_table
         self.messages_table = messages_table
         self._local = threading.local()
-        self._init_db()
 
     def _get_connection(self) -> sqlite3.Connection:
         """Get a thread-local database connection."""
@@ -132,11 +131,6 @@ class SQLiteSessionMemory(SessionMemory):
         )
 
         conn.commit()
-
-    def _init_db(self) -> None:
-        """Initialize the database schema."""
-        conn = self._get_connection()
-        # The schema initialization is now handled in _init_db_for_connection
 
     async def get_messages(self, session_id: str) -> list[TResponseInputItem]:
         """Retrieve the conversation history for a given session.
