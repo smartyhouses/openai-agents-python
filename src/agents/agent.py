@@ -14,6 +14,7 @@ from .handoffs import Handoff
 from .items import ItemHelpers
 from .logger import logger
 from .mcp import MCPUtil
+from .memory import SessionMemory
 from .model_settings import ModelSettings
 from .models.interface import Model
 from .run_context import RunContextWrapper, TContext
@@ -156,7 +157,9 @@ class Agent(Generic[TContext]):
     """
 
     tool_use_behavior: (
-        Literal["run_llm_again", "stop_on_first_tool"] | StopAtTools | ToolsToFinalOutputFunction
+        Literal["run_llm_again", "stop_on_first_tool"]
+        | StopAtTools
+        | ToolsToFinalOutputFunction
     ) = "run_llm_again"
     """This lets you configure how tool use is handled.
     - "run_llm_again": The default behavior. Tools are run, and then the LLM receives the results
@@ -177,6 +180,17 @@ class Agent(Generic[TContext]):
     reset_tool_choice: bool = True
     """Whether to reset the tool choice to the default value after a tool has been called. Defaults
     to True. This ensures that the agent doesn't enter an infinite loop of tool usage."""
+
+    memory: bool | SessionMemory | None = None
+    """Session memory for maintaining conversation history across runs.
+    
+    - None: No session memory (default behavior)
+    - True: Use default SQLite-based session memory
+    - SessionMemory instance: Use custom session memory implementation
+    
+    When memory is enabled, the agent will automatically maintain conversation history
+    and you won't need to manually handle .to_input_list() between runs.
+    """
 
     def clone(self, **kwargs: Any) -> Agent[TContext]:
         """Make a copy of the agent, with the given arguments changed. For example, you could do:
@@ -209,7 +223,8 @@ class Agent(Generic[TContext]):
         """
 
         @function_tool(
-            name_override=tool_name or _transforms.transform_string_function_style(self.name),
+            name_override=tool_name
+            or _transforms.transform_string_function_style(self.name),
             description_override=tool_description or "",
         )
         async def run_agent(context: RunContextWrapper, input: str) -> str:
@@ -227,7 +242,9 @@ class Agent(Generic[TContext]):
 
         return run_agent
 
-    async def get_system_prompt(self, run_context: RunContextWrapper[TContext]) -> str | None:
+    async def get_system_prompt(
+        self, run_context: RunContextWrapper[TContext]
+    ) -> str | None:
         """Get the system prompt for the agent."""
         if isinstance(self.instructions, str):
             return self.instructions
@@ -237,14 +254,20 @@ class Agent(Generic[TContext]):
             else:
                 return cast(str, self.instructions(run_context, self))
         elif self.instructions is not None:
-            logger.error(f"Instructions must be a string or a function, got {self.instructions}")
+            logger.error(
+                f"Instructions must be a string or a function, got {self.instructions}"
+            )
 
         return None
 
     async def get_mcp_tools(self) -> list[Tool]:
         """Fetches the available tools from the MCP servers."""
-        convert_schemas_to_strict = self.mcp_config.get("convert_schemas_to_strict", False)
-        return await MCPUtil.get_all_function_tools(self.mcp_servers, convert_schemas_to_strict)
+        convert_schemas_to_strict = self.mcp_config.get(
+            "convert_schemas_to_strict", False
+        )
+        return await MCPUtil.get_all_function_tools(
+            self.mcp_servers, convert_schemas_to_strict
+        )
 
     async def get_all_tools(self) -> list[Tool]:
         """All agent tools, including MCP tools and function tools."""

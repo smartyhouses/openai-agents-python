@@ -9,9 +9,60 @@ The OpenAI Agents SDK is a lightweight yet powerful framework for building multi
 1. [**Agents**](https://openai.github.io/openai-agents-python/agents): LLMs configured with instructions, tools, guardrails, and handoffs
 2. [**Handoffs**](https://openai.github.io/openai-agents-python/handoffs/): A specialized tool call used by the Agents SDK for transferring control between agents
 3. [**Guardrails**](https://openai.github.io/openai-agents-python/guardrails/): Configurable safety checks for input and output validation
-4. [**Tracing**](https://openai.github.io/openai-agents-python/tracing/): Built-in tracking of agent runs, allowing you to view, debug and optimize your workflows
+4. [**Session Memory**](#session-memory): Automatic conversation history management across agent runs
+5. [**Tracing**](https://openai.github.io/openai-agents-python/tracing/): Built-in tracking of agent runs, allowing you to view, debug and optimize your workflows
 
 Explore the [examples](examples) directory to see the SDK in action, and read our [documentation](https://openai.github.io/openai-agents-python/) for more details.
+
+## Session Memory
+
+The Agents SDK provides built-in session memory to automatically maintain conversation history across multiple agent runs, eliminating the need to manually handle `.to_input_list()` between turns.
+
+### Quick start
+
+```python
+from agents import Agent, Runner, RunConfig
+
+# Create agent with session memory enabled
+agent = Agent(
+    name="Assistant",
+    instructions="Reply very concisely.",
+    memory=True  # Enable automatic session memory
+)
+
+# Use session ID to maintain conversation history
+run_config = RunConfig(session_id="conversation_123")
+
+# First turn
+result = await Runner.run(agent, "What city is the Golden Gate Bridge in?", run_config=run_config)
+print(result.final_output)  # "San Francisco"
+
+# Second turn - agent automatically remembers previous context
+result = await Runner.run(agent, "What state is it in?", run_config=run_config)
+print(result.final_output)  # "California"
+
+# Also works with synchronous runner
+result = Runner.run_sync(agent, "What's the population?", run_config=run_config)
+print(result.final_output)  # "Approximately 39 million"
+```
+
+### Memory options
+
+-   **`memory=None`** (default): No session memory
+-   **`memory=True`**: Use default in-memory SQLite session memory
+-   **`memory=SessionMemory`**: Use custom session memory implementation
+
+```python
+from agents import SQLiteSessionMemory
+
+# Custom SQLite database file
+memory = SQLiteSessionMemory("conversations.db")
+agent = Agent(name="Assistant", memory=memory)
+
+# Different session IDs maintain separate conversation histories
+run_config_1 = RunConfig(session_id="user_123")
+run_config_2 = RunConfig(session_id="user_456")
+```
 
 ## Get started
 

@@ -27,11 +27,17 @@ from .exceptions import (
     ModelBehaviorError,
     OutputGuardrailTripwireTriggered,
 )
-from .guardrail import InputGuardrail, InputGuardrailResult, OutputGuardrail, OutputGuardrailResult
+from .guardrail import (
+    InputGuardrail,
+    InputGuardrailResult,
+    OutputGuardrail,
+    OutputGuardrailResult,
+)
 from .handoffs import Handoff, HandoffInputFilter, handoff
 from .items import ItemHelpers, ModelResponse, RunItem, TResponseInputItem
 from .lifecycle import RunHooks
 from .logger import logger
+from .memory import SessionMemory, SQLiteSessionMemory
 from .model_settings import ModelSettings
 from .models.interface import Model, ModelProvider
 from .models.multi_provider import MultiProvider
@@ -105,6 +111,12 @@ class RunConfig:
     An optional dictionary of additional metadata to include with the trace.
     """
 
+    session_id: str | None = None
+    """
+    A session identifier for memory persistence. If provided and the agent has memory enabled,
+    conversation history will be automatically managed using this session ID.
+    """
+
 
 class Runner:
     @classmethod
@@ -154,6 +166,11 @@ class Runner:
         if run_config is None:
             run_config = RunConfig()
 
+        # Prepare input with session memory if enabled
+        prepared_input, session_memory = await cls._prepare_input_with_memory(
+            starting_agent, input, run_config
+        )
+
         tool_use_tracker = AgentToolUseTracker()
 
         with TraceCtxManager(
@@ -164,7 +181,9 @@ class Runner:
             disabled=run_config.tracing_disabled,
         ):
             current_turn = 0
-            original_input: str | list[TResponseInputItem] = copy.deepcopy(input)
+            original_input: str | list[TResponseInputItem] = copy.deepcopy(
+                prepared_input
+            )
             generated_items: list[RunItem] = []
             model_responses: list[ModelResponse] = []
 
@@ -183,7 +202,9 @@ class Runner:
                     # Start an agent span if we don't have one. This span is ended if the current
                     # agent changes, or if the agent loop ends.
                     if current_span is None:
-                        handoff_names = [h.agent_name for h in cls._get_handoffs(current_agent)]
+                        handoff_names = [
+                            h.agent_name for h in cls._get_handoffs(current_agent)
+                        ]
                         if output_schema := cls._get_output_schema(current_agent):
                             output_type_name = output_schema.name()
                         else:
@@ -220,7 +241,7 @@ class Runner:
                                 starting_agent,
                                 starting_agent.input_guardrails
                                 + (run_config.input_guardrails or []),
-                                copy.deepcopy(input),
+                                copy.deepcopy(prepared_input),
                                 context_wrapper,
                             ),
                             cls._run_single_turn(
@@ -257,12 +278,13 @@ class Runner:
 
                     if isinstance(turn_result.next_step, NextStepFinalOutput):
                         output_guardrail_results = await cls._run_output_guardrails(
-                            current_agent.output_guardrails + (run_config.output_guardrails or []),
+                            current_agent.output_guardrails
+                            + (run_config.output_guardrails or []),
                             current_agent,
                             turn_result.next_step.output,
                             context_wrapper,
                         )
-                        return RunResult(
+                        result = RunResult(
                             input=original_input,
                             new_items=generated_items,
                             raw_responses=model_responses,
@@ -272,8 +294,17 @@ class Runner:
                             output_guardrail_results=output_guardrail_results,
                             context_wrapper=context_wrapper,
                         )
+
+                        # Save the conversation to session memory if enabled
+                        await cls._save_result_to_memory(
+                            session_memory, run_config.session_id, input, result
+                        )
+
+                        return result
                     elif isinstance(turn_result.next_step, NextStepHandoff):
-                        current_agent = cast(Agent[TContext], turn_result.next_step.new_agent)
+                        current_agent = cast(
+                            Agent[TContext], turn_result.next_step.new_agent
+                        )
                         current_span.finish(reset_current=True)
                         current_span = None
                         should_run_agent_start_hooks = True
@@ -500,13 +531,23 @@ class Runner:
         if streamed_result.trace:
             streamed_result.trace.start(mark_as_current=True)
 
+        # Prepare input with session memory if enabled
+        prepared_input, session_memory = await cls._prepare_input_with_memory(
+            starting_agent, starting_input, run_config
+        )
+
+        # Update the streamed result with the prepared input
+        streamed_result.input = prepared_input
+
         current_span: Span[AgentSpanData] | None = None
         current_agent = starting_agent
         current_turn = 0
         should_run_agent_start_hooks = True
         tool_use_tracker = AgentToolUseTracker()
 
-        streamed_result._event_queue.put_nowait(AgentUpdatedStreamEvent(new_agent=current_agent))
+        streamed_result._event_queue.put_nowait(
+            AgentUpdatedStreamEvent(new_agent=current_agent)
+        )
 
         try:
             while True:
@@ -516,7 +557,9 @@ class Runner:
                 # Start an agent span if we don't have one. This span is ended if the current
                 # agent changes, or if the agent loop ends.
                 if current_span is None:
-                    handoff_names = [h.agent_name for h in cls._get_handoffs(current_agent)]
+                    handoff_names = [
+                        h.agent_name for h in cls._get_handoffs(current_agent)
+                    ]
                     if output_schema := cls._get_output_schema(current_agent):
                         output_type_name = output_schema.name()
                     else:
@@ -551,8 +594,11 @@ class Runner:
                     streamed_result._input_guardrails_task = asyncio.create_task(
                         cls._run_input_guardrails_with_queue(
                             starting_agent,
-                            starting_agent.input_guardrails + (run_config.input_guardrails or []),
-                            copy.deepcopy(ItemHelpers.input_to_new_input_list(starting_input)),
+                            starting_agent.input_guardrails
+                            + (run_config.input_guardrails or []),
+                            copy.deepcopy(
+                                ItemHelpers.input_to_new_input_list(prepared_input)
+                            ),
                             context_wrapper,
                             streamed_result,
                             current_span,
@@ -598,14 +644,38 @@ class Runner:
                         )
 
                         try:
-                            output_guardrail_results = await streamed_result._output_guardrails_task
+                            output_guardrail_results = (
+                                await streamed_result._output_guardrails_task
+                            )
                         except Exception:
                             # Exceptions will be checked in the stream_events loop
                             output_guardrail_results = []
 
-                        streamed_result.output_guardrail_results = output_guardrail_results
+                        streamed_result.output_guardrail_results = (
+                            output_guardrail_results
+                        )
                         streamed_result.final_output = turn_result.next_step.output
                         streamed_result.is_complete = True
+
+                        # Save the conversation to session memory if enabled
+                        # Create a temporary RunResult for memory saving
+                        temp_result = RunResult(
+                            input=streamed_result.input,
+                            new_items=streamed_result.new_items,
+                            raw_responses=streamed_result.raw_responses,
+                            final_output=streamed_result.final_output,
+                            _last_agent=current_agent,
+                            input_guardrail_results=streamed_result.input_guardrail_results,
+                            output_guardrail_results=streamed_result.output_guardrail_results,
+                            context_wrapper=context_wrapper,
+                        )
+                        await cls._save_result_to_memory(
+                            session_memory,
+                            run_config.session_id,
+                            starting_input,
+                            temp_result,
+                        )
+
                         streamed_result._event_queue.put_nowait(QueueCompleteSentinel())
                     elif isinstance(turn_result.next_step, NextStepRunAgain):
                         pass
@@ -662,7 +732,9 @@ class Runner:
         handoffs = cls._get_handoffs(agent)
         model = cls._get_model(agent, run_config)
         model_settings = agent.model_settings.resolve(run_config.model_settings)
-        model_settings = RunImpl.maybe_reset_tool_choice(agent, tool_use_tracker, model_settings)
+        model_settings = RunImpl.maybe_reset_tool_choice(
+            agent, tool_use_tracker, model_settings
+        )
 
         final_response: ModelResponse | None = None
 
@@ -723,7 +795,9 @@ class Runner:
             tool_use_tracker=tool_use_tracker,
         )
 
-        RunImpl.stream_step_result_to_queue(single_step_result, streamed_result._event_queue)
+        RunImpl.stream_step_result_to_queue(
+            single_step_result, streamed_result._event_queue
+        )
         return single_step_result
 
     @classmethod
@@ -757,7 +831,9 @@ class Runner:
         output_schema = cls._get_output_schema(agent)
         handoffs = cls._get_handoffs(agent)
         input = ItemHelpers.input_to_new_input_list(original_input)
-        input.extend([generated_item.to_input_item() for generated_item in generated_items])
+        input.extend(
+            [generated_item.to_input_item() for generated_item in generated_items]
+        )
 
         new_response = await cls._get_new_response(
             agent,
@@ -875,7 +951,9 @@ class Runner:
 
         guardrail_tasks = [
             asyncio.create_task(
-                RunImpl.run_single_output_guardrail(guardrail, agent, agent_output, context)
+                RunImpl.run_single_output_guardrail(
+                    guardrail, agent, agent_output, context
+                )
             )
             for guardrail in guardrails
         ]
@@ -916,7 +994,9 @@ class Runner:
     ) -> ModelResponse:
         model = cls._get_model(agent, run_config)
         model_settings = agent.model_settings.resolve(run_config.model_settings)
-        model_settings = RunImpl.maybe_reset_tool_choice(agent, tool_use_tracker, model_settings)
+        model_settings = RunImpl.maybe_reset_tool_choice(
+            agent, tool_use_tracker, model_settings
+        )
 
         new_response = await model.get_response(
             system_instructions=system_prompt,
@@ -968,3 +1048,60 @@ class Runner:
             return agent.model
 
         return run_config.model_provider.get_model(agent.model)
+
+    @classmethod
+    def _get_session_memory(cls, agent: Agent[Any]) -> SessionMemory | None:
+        """Get the session memory instance for the agent, if any."""
+        if agent.memory is None:
+            return None
+        elif agent.memory is True:
+            return SQLiteSessionMemory()
+        elif isinstance(agent.memory, SessionMemory):
+            return agent.memory
+        else:
+            raise ValueError(f"Invalid memory configuration: {agent.memory}")
+
+    @classmethod
+    async def _prepare_input_with_memory(
+        cls,
+        agent: Agent[Any],
+        input: str | list[TResponseInputItem],
+        run_config: RunConfig,
+    ) -> tuple[str | list[TResponseInputItem], SessionMemory | None]:
+        """Prepare input by combining it with session memory if enabled."""
+        memory = cls._get_session_memory(agent)
+        if memory is None or run_config.session_id is None:
+            return input, memory
+
+        # Get previous conversation history
+        history = await memory.get_messages(run_config.session_id)
+
+        # Convert input to list format
+        new_input_list = ItemHelpers.input_to_new_input_list(input)
+
+        # Combine history with new input
+        combined_input = history + new_input_list
+
+        return combined_input, memory
+
+    @classmethod
+    async def _save_result_to_memory(
+        cls,
+        memory: SessionMemory | None,
+        session_id: str | None,
+        original_input: str | list[TResponseInputItem],
+        result: RunResult,
+    ) -> None:
+        """Save the conversation turn to session memory."""
+        if memory is None or session_id is None:
+            return
+
+        # Convert original input to list format if needed
+        input_list = ItemHelpers.input_to_new_input_list(original_input)
+
+        # Convert new items to input format
+        new_items_as_input = [item.to_input_item() for item in result.new_items]
+
+        # Save all messages from this turn
+        messages_to_save = input_list + new_items_as_input
+        await memory.add_messages(session_id, messages_to_save)
