@@ -5,7 +5,6 @@ import time
 from collections.abc import AsyncIterator
 from typing import Any, Literal, cast, overload
 
-import litellm.types
 from openai.types.responses.response_usage import InputTokensDetails, OutputTokensDetails
 
 from agents.exceptions import ModelBehaviorError
@@ -111,12 +110,12 @@ class LitellmModel(Model):
                         input_tokens_details=InputTokensDetails(
                             cached_tokens=getattr(
                                 response_usage.prompt_tokens_details, "cached_tokens", 0
-                            )
+                            ) or 0
                         ),
                         output_tokens_details=OutputTokensDetails(
                             reasoning_tokens=getattr(
                                 response_usage.completion_tokens_details, "reasoning_tokens", 0
-                            )
+                            ) or 0
                         ),
                     )
                     if response.usage
