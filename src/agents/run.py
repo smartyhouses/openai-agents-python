@@ -26,6 +26,7 @@ from .exceptions import (
     MaxTurnsExceeded,
     ModelBehaviorError,
     OutputGuardrailTripwireTriggered,
+    UserError,
 )
 from .guardrail import (
     InputGuardrail,
@@ -1070,6 +1071,15 @@ class Runner:
         """Prepare input by combining it with session history if enabled."""
         if session is None:
             return input
+
+        # Validate that we don't have both a session and a list input, as this creates
+        # ambiguity about whether the list should append to or replace existing session history
+        if isinstance(input, list):
+            raise UserError(
+                "Cannot provide both a session and a list of input items. "
+                "When using session memory, provide only a string input to append to the conversation, "
+                "or use session=None and provide a list to manually manage conversation history."
+            )
 
         # Get previous conversation history
         history = await session.get_messages()

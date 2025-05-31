@@ -6,6 +6,7 @@ from pathlib import Path
 import asyncio
 
 from agents import Agent, Runner, SQLiteSession
+from agents.exceptions import UserError
 
 from .fake_model import FakeModel
 from .test_responses import get_text_message
@@ -370,5 +371,36 @@ async def test_sqlite_session_get_messages_with_count():
         # Test getting 0 messages
         latest_0 = await session.get_messages(count=0)
         assert len(latest_0) == 0
+
+        session.close()
+
+
+@pytest.mark.parametrize("runner_method", ["run", "run_sync", "run_streamed"])
+@pytest.mark.asyncio
+async def test_session_memory_rejects_both_session_and_list_input(runner_method):
+    """Test that passing both a session and list input raises a UserError across all runner methods."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        db_path = Path(temp_dir) / "test_validation.db"
+        session_id = "test_validation_parametrized"
+        session = SQLiteSession(session_id, db_path)
+
+        model = FakeModel()
+        agent = Agent(name="test", model=model)
+
+        # Test that providing both a session and a list input raises a UserError
+        model.set_next_output([get_text_message("This shouldn't run")])
+
+        list_input = [
+            {"role": "user", "content": "Test message"},
+        ]
+
+        with pytest.raises(UserError) as exc_info:
+            await run_agent_async(runner_method, agent, list_input, session=session)
+
+        # Verify the error message explains the issue
+        assert "Cannot provide both a session and a list of input items" in str(
+            exc_info.value
+        )
+        assert "manually manage conversation history" in str(exc_info.value)
 
         session.close()
