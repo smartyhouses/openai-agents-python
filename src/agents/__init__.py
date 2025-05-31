@@ -14,6 +14,7 @@ from .exceptions import (
     MaxTurnsExceeded,
     ModelBehaviorError,
     OutputGuardrailTripwireTriggered,
+    RunErrorDetails,
     UserError,
 )
 from .guardrail import (
@@ -209,6 +210,7 @@ __all__ = [
     "SQLiteSession",
     "RunContextWrapper",
     "TContext",
+    "RunErrorDetails",
     "RunResult",
     "RunResultStreaming",
     "RunConfig",
