@@ -179,7 +179,7 @@ class MyCustomSession:
         self.session_id = session_id
         # Your initialization here
 
-    async def get_messages(self) -> List[dict]:
+    async def get_messages(self, limit: int | None = None) -> List[dict]:
         """Retrieve conversation history for this session."""
         # Your implementation here
         pass
