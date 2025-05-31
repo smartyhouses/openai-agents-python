@@ -56,9 +56,9 @@ async def main():
     print("Notice how the agent remembered the context from previous turns!")
     print("Sessions automatically handles conversation history.")
 
-    # Demonstrate the count parameter - get only the latest 2 messages
+    # Demonstrate the limit parameter - get only the latest 2 messages
     print("\n=== Latest Messages Demo ===")
-    latest_messages = await session.get_messages(count=2)
+    latest_messages = await session.get_messages(limit=2)
     print("Latest 2 messages:")
     for i, msg in enumerate(latest_messages, 1):
         role = msg.get("role", "unknown")

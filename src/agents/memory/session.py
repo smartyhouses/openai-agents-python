@@ -22,11 +22,11 @@ class Session(Protocol):
 
     session_id: str
 
-    async def get_messages(self, count: int | None = None) -> list[TResponseInputItem]:
+    async def get_messages(self, limit: int | None = None) -> list[TResponseInputItem]:
         """Retrieve the conversation history for this session.
 
         Args:
-            count: Maximum number of messages to retrieve. If None, retrieves all messages.
+            limit: Maximum number of messages to retrieve. If None, retrieves all messages.
                    When specified, returns the latest N messages in chronological order.
 
         Returns:
@@ -68,11 +68,11 @@ class SessionABC(ABC):
     session_id: str
 
     @abstractmethod
-    async def get_messages(self, count: int | None = None) -> list[TResponseInputItem]:
+    async def get_messages(self, limit: int | None = None) -> list[TResponseInputItem]:
         """Retrieve the conversation history for this session.
 
         Args:
-            count: Maximum number of messages to retrieve. If None, retrieves all messages.
+            limit: Maximum number of messages to retrieve. If None, retrieves all messages.
                    When specified, returns the latest N messages in chronological order.
 
         Returns:
@@ -198,11 +198,11 @@ class SQLiteSession(SessionABC):
 
         conn.commit()
 
-    async def get_messages(self, count: int | None = None) -> list[TResponseInputItem]:
+    async def get_messages(self, limit: int | None = None) -> list[TResponseInputItem]:
         """Retrieve the conversation history for this session.
 
         Args:
-            count: Maximum number of messages to retrieve. If None, retrieves all messages.
+            limit: Maximum number of messages to retrieve. If None, retrieves all messages.
                    When specified, returns the latest N messages in chronological order.
 
         Returns:
@@ -212,7 +212,7 @@ class SQLiteSession(SessionABC):
         def _get_messages_sync():
             conn = self._get_connection()
             with self._lock if self._is_memory_db else threading.Lock():
-                if count is None:
+                if limit is None:
                     # Fetch all messages in chronological order
                     cursor = conn.execute(
                         f"""
@@ -224,7 +224,7 @@ class SQLiteSession(SessionABC):
                     )
                 else:
                     # Fetch the latest N messages in chronological order
-                    # First get the total count to calculate offset
+                    # First get the total limit to calculate offset
                     count_cursor = conn.execute(
                         f"""
                         SELECT COUNT(*) FROM {self.messages_table} 
@@ -235,7 +235,7 @@ class SQLiteSession(SessionABC):
                     total_count = count_cursor.fetchone()[0]
 
                     # Calculate offset to get the latest N messages
-                    offset = max(0, total_count - count)
+                    offset = max(0, total_count - limit)
 
                     cursor = conn.execute(
                         f"""
@@ -244,7 +244,7 @@ class SQLiteSession(SessionABC):
                         ORDER BY created_at ASC
                         LIMIT ? OFFSET ?
                     """,
-                        (self.session_id, count, offset),
+                        (self.session_id, limit, offset),
                     )
 
                 messages = []

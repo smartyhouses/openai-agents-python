@@ -349,13 +349,13 @@ async def test_sqlite_session_get_messages_with_count():
         assert all_messages[-1]["content"] == "Response 3"
 
         # Test getting latest 2 messages
-        latest_2 = await session.get_messages(count=2)
+        latest_2 = await session.get_messages(limit=2)
         assert len(latest_2) == 2
         assert latest_2[0]["content"] == "Message 3"
         assert latest_2[1]["content"] == "Response 3"
 
         # Test getting latest 4 messages
-        latest_4 = await session.get_messages(count=4)
+        latest_4 = await session.get_messages(limit=4)
         assert len(latest_4) == 4
         assert latest_4[0]["content"] == "Message 2"
         assert latest_4[1]["content"] == "Response 2"
@@ -363,13 +363,13 @@ async def test_sqlite_session_get_messages_with_count():
         assert latest_4[3]["content"] == "Response 3"
 
         # Test getting more messages than available
-        latest_10 = await session.get_messages(count=10)
+        latest_10 = await session.get_messages(limit=10)
         assert len(latest_10) == 6  # Should return all available messages
         assert latest_10[0]["content"] == "Message 1"
         assert latest_10[-1]["content"] == "Response 3"
 
         # Test getting 0 messages
-        latest_0 = await session.get_messages(count=0)
+        latest_0 = await session.get_messages(limit=0)
         assert len(latest_0) == 0
 
         session.close()
