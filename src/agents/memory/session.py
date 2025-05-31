@@ -21,11 +21,11 @@ class Session(Protocol):
 
     session_id: str
 
-    async def get_messages(self, amount: int | None = None) -> list[TResponseInputItem]:
+    async def get_messages(self, count: int | None = None) -> list[TResponseInputItem]:
         """Retrieve the conversation history for this session.
 
         Args:
-            amount: Maximum number of messages to retrieve. If None, retrieves all messages.
+            count: Maximum number of messages to retrieve. If None, retrieves all messages.
                    When specified, returns the latest N messages in chronological order.
 
         Returns:
@@ -148,11 +148,11 @@ class SQLiteSession(Session):
 
         conn.commit()
 
-    async def get_messages(self, amount: int | None = None) -> list[TResponseInputItem]:
+    async def get_messages(self, count: int | None = None) -> list[TResponseInputItem]:
         """Retrieve the conversation history for this session.
 
         Args:
-            amount: Maximum number of messages to retrieve. If None, retrieves all messages.
+            count: Maximum number of messages to retrieve. If None, retrieves all messages.
                    When specified, returns the latest N messages in chronological order.
 
         Returns:
@@ -162,7 +162,7 @@ class SQLiteSession(Session):
         def _get_messages_sync():
             conn = self._get_connection()
             with self._lock if self._is_memory_db else threading.Lock():
-                if amount is None:
+                if count is None:
                     # Fetch all messages in chronological order
                     cursor = conn.execute(
                         f"""
@@ -185,7 +185,7 @@ class SQLiteSession(Session):
                     total_count = count_cursor.fetchone()[0]
 
                     # Calculate offset to get the latest N messages
-                    offset = max(0, total_count - amount)
+                    offset = max(0, total_count - count)
 
                     cursor = conn.execute(
                         f"""
@@ -194,7 +194,7 @@ class SQLiteSession(Session):
                         ORDER BY created_at ASC
                         LIMIT ? OFFSET ?
                     """,
-                        (self.session_id, amount, offset),
+                        (self.session_id, count, offset),
                     )
 
                 messages = []
