@@ -4,6 +4,7 @@ import asyncio
 import json
 import sqlite3
 import threading
+from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, TYPE_CHECKING, Protocol, runtime_checkable
 
@@ -54,7 +55,56 @@ class Session(Protocol):
         ...
 
 
-class SQLiteSession(Session):
+class SessionABC(ABC):
+    """Abstract base class for session implementations.
+
+    Session stores conversation history for a specific session, allowing
+    agents to maintain context without requiring explicit manual memory management.
+
+    This ABC is intended for internal use and as a base class for concrete implementations.
+    Third-party libraries should implement the Session protocol instead.
+    """
+
+    session_id: str
+
+    @abstractmethod
+    async def get_messages(self, count: int | None = None) -> list[TResponseInputItem]:
+        """Retrieve the conversation history for this session.
+
+        Args:
+            count: Maximum number of messages to retrieve. If None, retrieves all messages.
+                   When specified, returns the latest N messages in chronological order.
+
+        Returns:
+            List of input items representing the conversation history
+        """
+        ...
+
+    @abstractmethod
+    async def add_messages(self, messages: list[TResponseInputItem]) -> None:
+        """Add new messages to the conversation history.
+
+        Args:
+            messages: List of input items to add to the history
+        """
+        ...
+
+    @abstractmethod
+    async def pop_message(self) -> TResponseInputItem | None:
+        """Remove and return the most recent message from the session.
+
+        Returns:
+            The most recent message if it exists, None if the session is empty
+        """
+        ...
+
+    @abstractmethod
+    async def clear_session(self) -> None:
+        """Clear all messages for this session."""
+        ...
+
+
+class SQLiteSession(SessionABC):
     """SQLite-based implementation of session storage.
 
     This implementation stores conversation history in a SQLite database.
