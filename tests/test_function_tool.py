@@ -5,7 +5,7 @@ import pytest
 from pydantic import BaseModel
 from typing_extensions import TypedDict
 
-from agents import FunctionTool, ModelBehaviorError, RunContextWrapper, function_tool
+from agents import Agent, FunctionTool, ModelBehaviorError, RunContextWrapper, function_tool
 from agents.tool import default_tool_error_function
 
 
@@ -255,3 +255,26 @@ async def test_async_custom_error_function_works():
 
     result = await tool.on_invoke_tool(ctx, '{"a": 1, "b": 2}')
     assert result == "error_ValueError"
+
+
+@pytest.mark.asyncio
+async def test_is_enabled_bool_and_callable():
+    @function_tool(is_enabled=False)
+    def disabled_tool():
+        return "nope"
+
+    async def cond_enabled(ctx: RunContextWrapper[Any], agent: Agent[Any]) -> bool:
+        return False
+
+    @function_tool(is_enabled=cond_enabled)
+    def another_tool():
+        return "hi"
+
+    agent = Agent(name="t", tools=[disabled_tool, another_tool])
+    context = RunContextWrapper(None)
+
+    tools_with_ctx = await agent.get_all_tools(context)
+    assert tools_with_ctx == []
+
+    tools_no_ctx = await agent.get_all_tools(context)
+    assert len(tools_no_ctx) == 2
