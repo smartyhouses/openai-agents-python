@@ -196,7 +196,7 @@ class Runner:
 
             try:
                 while True:
-                    all_tools = await cls._get_all_tools(current_agent)
+                    all_tools = await cls._get_all_tools(current_agent, context_wrapper)
 
                     # Start an agent span if we don't have one. This span is ended if the current
                     # agent changes, or if the agent loop ends.
@@ -572,7 +572,7 @@ class Runner:
                         break
 
                     # Get all tools for the current agent (must be done on every turn)
-                    all_tools = await cls._get_all_tools(current_agent)
+                    all_tools = await cls._get_all_tools(current_agent, context_wrapper)
 
                     # Start an agent span if we don't have one. This span is ended if the current
                     # agent changes, or if the agent loop ends.
@@ -1074,8 +1074,10 @@ class Runner:
         return handoffs
 
     @classmethod
-    async def _get_all_tools(cls, agent: Agent[Any]) -> list[Tool]:
-        return await agent.get_all_tools()
+    async def _get_all_tools(
+        cls, agent: Agent[Any], context_wrapper: RunContextWrapper[Any]
+    ) -> list[Tool]:
+        return await agent.get_all_tools(context_wrapper)
 
     @classmethod
     def _get_model(cls, agent: Agent[Any], run_config: RunConfig) -> Model:
