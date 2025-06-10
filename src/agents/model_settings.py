@@ -73,6 +73,11 @@ class ModelSettings:
     """Additional headers to provide with the request.
     Defaults to None if not provided."""
 
+    kwargs: dict[str, Any] | None = None
+    """Arbitrary keyword arguments to pass to the model API call.
+    These will be passed directly to the underlying model provider's API.
+    Use with caution as not all models support all parameters."""
+
     def resolve(self, override: ModelSettings | None) -> ModelSettings:
         """Produce a new ModelSettings by overlaying any non-None values from the
         override on top of this instance."""
@@ -84,6 +89,16 @@ class ModelSettings:
             for field in fields(self)
             if getattr(override, field.name) is not None
         }
+
+        # Handle kwargs merging specially - merge dictionaries instead of replacing
+        if self.kwargs is not None or override.kwargs is not None:
+            merged_kwargs = {}
+            if self.kwargs:
+                merged_kwargs.update(self.kwargs)
+            if override.kwargs:
+                merged_kwargs.update(override.kwargs)
+            changes["kwargs"] = merged_kwargs if merged_kwargs else None
+
         return replace(self, **changes)
 
     def to_json_dict(self) -> dict[str, Any]:
