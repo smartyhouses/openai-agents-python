@@ -284,6 +284,10 @@ class LitellmModel(Model):
         if model_settings.extra_body and isinstance(model_settings.extra_body, dict):
             extra_kwargs.update(model_settings.extra_body)
 
+        # Add kwargs from model_settings.kwargs, filtering out None values
+        if model_settings.kwargs:
+            extra_kwargs.update(model_settings.kwargs)
+
         ret = await litellm.acompletion(
             model=self.model,
             messages=converted_messages,
