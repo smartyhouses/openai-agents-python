@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import abc
 import os
 import threading
 import uuid
@@ -81,7 +82,72 @@ class SynchronousMultiTracingProcessor(TracingProcessor):
             processor.force_flush()
 
 
-class TraceProvider:
+class TraceProvider(abc.ABC):
+    """Abstract base class for tracing providers."""
+
+    @abc.abstractmethod
+    def register_processor(self, processor: TracingProcessor):
+        """Add a tracing processor."""
+
+    @abc.abstractmethod
+    def set_processors(self, processors: list[TracingProcessor]):
+        """Replace the list of tracing processors."""
+
+    @abc.abstractmethod
+    def get_current_trace(self) -> Trace | None:
+        """Return the currently active trace, if any."""
+
+    @abc.abstractmethod
+    def get_current_span(self) -> Span[Any] | None:
+        """Return the currently active span, if any."""
+
+    @abc.abstractmethod
+    def set_disabled(self, disabled: bool) -> None:
+        """Globally enable or disable tracing."""
+
+    @abc.abstractmethod
+    def time_iso(self) -> str:
+        """Return the current time in ISO 8601 format."""
+
+    @abc.abstractmethod
+    def gen_trace_id(self) -> str:
+        """Generate a new trace ID."""
+
+    @abc.abstractmethod
+    def gen_span_id(self) -> str:
+        """Generate a new span ID."""
+
+    @abc.abstractmethod
+    def gen_group_id(self) -> str:
+        """Generate a new group ID."""
+
+    @abc.abstractmethod
+    def create_trace(
+        self,
+        name: str,
+        trace_id: str | None = None,
+        group_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        disabled: bool = False,
+    ) -> Trace:
+        """Create a new trace instance."""
+
+    @abc.abstractmethod
+    def create_span(
+        self,
+        span_data: TSpanData,
+        span_id: str | None = None,
+        parent: Trace | Span[Any] | None = None,
+        disabled: bool = False,
+    ) -> Span[TSpanData]:
+        """Create a new span instance."""
+
+    @abc.abstractmethod
+    def shutdown(self) -> None:
+        """Shut down the provider and flush processors."""
+
+
+class DefaultTraceProvider(TraceProvider):
     def __init__(self):
         self._multi_processor = SynchronousMultiTracingProcessor()
         self._disabled = os.environ.get("OPENAI_AGENTS_DISABLE_TRACING", "false").lower() in (

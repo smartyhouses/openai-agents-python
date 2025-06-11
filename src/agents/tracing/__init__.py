@@ -1,6 +1,6 @@
 import atexit
 
-from agents.tracing.provider import TraceProvider
+from agents.tracing.provider import DefaultTraceProvider
 
 from .create import (
     agent_span,
@@ -107,7 +107,7 @@ def set_tracing_export_api_key(api_key: str) -> None:
     default_exporter().set_api_key(api_key)
 
 
-set_trace_provider(TraceProvider())
+set_trace_provider(DefaultTraceProvider())
 # Add the default processor, which exports traces and spans to the backend in batches. You can
 # change the default behavior by either:
 # 1. calling add_trace_processor(), which adds additional processors, or
