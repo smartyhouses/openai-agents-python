@@ -74,6 +74,7 @@ class OpenAIResponsesModel(Model):
         handoffs: list[Handoff],
         tracing: ModelTracing,
         previous_response_id: str | None,
+        prompt: ResponsesPrompt | None = None,
     ) -> ModelResponse:
         with response_span(disabled=tracing.is_disabled()) as span_response:
             try:
@@ -86,6 +87,7 @@ class OpenAIResponsesModel(Model):
                     handoffs,
                     previous_response_id,
                     stream=False,
+                    prompt=prompt,
                 )
 
                 if _debug.DONT_LOG_MODEL_DATA:
@@ -141,6 +143,7 @@ class OpenAIResponsesModel(Model):
         handoffs: list[Handoff],
         tracing: ModelTracing,
         previous_response_id: str | None,
+        prompt: ResponsesPrompt | None = None,
     ) -> AsyncIterator[ResponseStreamEvent]:
         """
         Yields a partial message as it is generated, as well as the usage information.
@@ -156,6 +159,7 @@ class OpenAIResponsesModel(Model):
                     handoffs,
                     previous_response_id,
                     stream=True,
+                    prompt=prompt,
                 )
 
                 final_response: Response | None = None
@@ -192,6 +196,7 @@ class OpenAIResponsesModel(Model):
         handoffs: list[Handoff],
         previous_response_id: str | None,
         stream: Literal[True],
+        prompt: ResponsesPrompt | None = None,
     ) -> AsyncStream[ResponseStreamEvent]: ...
 
     @overload
@@ -205,6 +210,7 @@ class OpenAIResponsesModel(Model):
         handoffs: list[Handoff],
         previous_response_id: str | None,
         stream: Literal[False],
+        prompt: ResponsesPrompt | None = None,
     ) -> Response: ...
 
     async def _fetch_response(
@@ -217,6 +223,7 @@ class OpenAIResponsesModel(Model):
         handoffs: list[Handoff],
         previous_response_id: str | None,
         stream: Literal[True] | Literal[False] = False,
+        prompt: ResponsesPrompt | None = None,
     ) -> Response | AsyncStream[ResponseStreamEvent]:
         list_input = ItemHelpers.input_to_new_input_list(input)
 
