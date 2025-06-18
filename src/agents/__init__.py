@@ -46,6 +46,7 @@ from .models.interface import Model, ModelProvider, ModelTracing
 from .models.openai_chatcompletions import OpenAIChatCompletionsModel
 from .models.openai_provider import OpenAIProvider
 from .models.openai_responses import OpenAIResponsesModel
+from .prompts import DynamicPromptFunction, GenerateDynamicPromptData, Prompt
 from .repl import run_demo_loop
 from .result import RunResult, RunResultStreaming
 from .run import RunConfig, Runner
@@ -104,6 +105,7 @@ from .tracing import (
     handoff_span,
     mcp_tools_span,
     set_trace_processors,
+    set_trace_provider,
     set_tracing_disabled,
     set_tracing_export_api_key,
     speech_group_span,
@@ -181,6 +183,9 @@ __all__ = [
     "AgentsException",
     "InputGuardrailTripwireTriggered",
     "OutputGuardrailTripwireTriggered",
+    "DynamicPromptFunction",
+    "GenerateDynamicPromptData",
+    "Prompt",
     "MaxTurnsExceeded",
     "ModelBehaviorError",
     "UserError",
@@ -247,6 +252,7 @@ __all__ = [
     "guardrail_span",
     "handoff_span",
     "set_trace_processors",
+    "set_trace_provider",
     "set_tracing_disabled",
     "speech_group_span",
     "transcription_span",
