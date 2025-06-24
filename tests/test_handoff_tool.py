@@ -66,7 +66,7 @@ async def test_multiple_handoffs_setup():
     assert not agent_1.handoffs
     assert not agent_2.handoffs
 
-    handoff_objects = AgentRunner._get_handoffs(agent_3)
+    handoff_objects = await AgentRunner._get_handoffs(agent_3, RunContextWrapper(agent_3))
     assert len(handoff_objects) == 2
     assert handoff_objects[0].tool_name == Handoff.default_tool_name(agent_1)
     assert handoff_objects[1].tool_name == Handoff.default_tool_name(agent_2)
@@ -98,7 +98,7 @@ async def test_custom_handoff_setup():
     assert not agent_1.handoffs
     assert not agent_2.handoffs
 
-    handoff_objects = AgentRunner._get_handoffs(agent_3)
+    handoff_objects = await AgentRunner._get_handoffs(agent_3, RunContextWrapper(agent_3))
     assert len(handoff_objects) == 2
 
     first_handoff = handoff_objects[0]
