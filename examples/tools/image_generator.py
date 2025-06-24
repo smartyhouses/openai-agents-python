@@ -23,11 +23,7 @@ async def main():
     agent = Agent(
         name="Image generator",
         instructions="You are a helpful agent.",
-        tools=[
-            ImageGenerationTool(
-                tool_config={"type": "image_generation", "quality": "low"},
-            )
-        ],
+        tools=[ImageGenerationTool(tool_config={"quality": "low"})],
     )
 
     with trace("Image generation example"):

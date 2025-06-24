@@ -193,6 +193,10 @@ class HostedMCPTool:
     def name(self):
         return "hosted_mcp"
 
+    def __post_init__(self):
+        if "type" not in self.tool_config:
+            self.tool_config["type"] = "mcp"
+
 
 @dataclass
 class CodeInterpreterTool:
@@ -204,6 +208,10 @@ class CodeInterpreterTool:
     @property
     def name(self):
         return "code_interpreter"
+
+    def __post_init__(self):
+        if "type" not in self.tool_config:
+            self.tool_config["type"] = "code_interpreter"
 
 
 @dataclass
@@ -217,6 +225,10 @@ class ImageGenerationTool:
     def name(self):
         return "image_generation"
 
+    def __post_init__(self):
+        if "type" not in self.tool_config:
+            self.tool_config["type"] = "image_generation"
+
 
 @dataclass
 class LocalShellCommandRequest:
@@ -227,6 +239,10 @@ class LocalShellCommandRequest:
 
     data: LocalShellCall
     """The data from the local shell tool call."""
+
+    def __post_init__(self):
+        if "type" not in self.data:
+            self.data["type"] = "local_shell_call"
 
 
 LocalShellExecutor = Callable[[LocalShellCommandRequest], MaybeAwaitable[str]]

@@ -7,11 +7,7 @@ async def main():
     agent = Agent(
         name="Code interpreter",
         instructions="You love doing math.",
-        tools=[
-            CodeInterpreterTool(
-                tool_config={"type": "code_interpreter", "container": {"type": "auto"}},
-            )
-        ],
+        tools=[CodeInterpreterTool(tool_config={"container": {"type": "auto"}})],
     )
 
     with trace("Code interpreter example"):

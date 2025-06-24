@@ -27,7 +27,6 @@ async def main(verbose: bool, stream: bool):
         tools=[
             HostedMCPTool(
                 tool_config={
-                    "type": "mcp",
                     "server_label": "gitmcp",
                     "server_url": "https://gitmcp.io/openai/codex",
                     "require_approval": "always",
