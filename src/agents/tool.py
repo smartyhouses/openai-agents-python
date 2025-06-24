@@ -240,10 +240,6 @@ class LocalShellCommandRequest:
     data: LocalShellCall
     """The data from the local shell tool call."""
 
-    def __post_init__(self):
-        if "type" not in self.data:
-            self.data["type"] = "local_shell_call"
-
 
 LocalShellExecutor = Callable[[LocalShellCommandRequest], MaybeAwaitable[str]]
 """A function that executes a command on a shell."""
