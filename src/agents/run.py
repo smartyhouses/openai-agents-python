@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import inspect
 from dataclasses import dataclass, field
 from typing import Any, Generic, cast
 
@@ -385,7 +386,8 @@ class AgentRunner:
                     # agent changes, or if the agent loop ends.
                     if current_span is None:
                         handoff_names = [
-                            h.agent_name for h in AgentRunner._get_handoffs(current_agent)
+                            h.agent_name
+                            for h in await AgentRunner._get_handoffs(current_agent, context_wrapper)
                         ]
                         if output_schema := AgentRunner._get_output_schema(current_agent):
                             output_type_name = output_schema.name()
@@ -692,7 +694,7 @@ class AgentRunner:
                     # agent changes, or if the agent loop ends.
                     if current_span is None:
                         handoff_names = [
-                            h.agent_name for h in AgentRunner._get_handoffs(current_agent)
+                            h.agent_name for h in await AgentRunner._get_handoffs(current_agent, context_wrapper)
                         ]
                         if output_schema := AgentRunner._get_output_schema(current_agent):
                             output_type_name = output_schema.name()
@@ -885,7 +887,7 @@ class AgentRunner:
             agent.get_prompt(context_wrapper),
         )
 
-        handoffs = AgentRunner._get_handoffs(agent)
+        handoffs = await AgentRunner._get_handoffs(agent, context_wrapper)
         model = AgentRunner._get_model(agent, run_config)
         model_settings = agent.model_settings.resolve(run_config.model_settings)
         model_settings = RunImpl.maybe_reset_tool_choice(
@@ -989,7 +991,7 @@ class AgentRunner:
         )
 
         output_schema = AgentRunner._get_output_schema(agent)
-        handoffs = AgentRunner._get_handoffs(agent)
+        handoffs = await AgentRunner._get_handoffs(agent, context_wrapper)
         input = ItemHelpers.input_to_new_input_list(original_input)
         input.extend(
             [generated_item.to_input_item() for generated_item in generated_items]
@@ -1188,14 +1190,28 @@ class AgentRunner:
         return AgentOutputSchema(agent.output_type)
 
     @classmethod
-    def _get_handoffs(cls, agent: Agent[Any]) -> list[Handoff]:
+    async def _get_handoffs(
+        cls, agent: Agent[Any], context_wrapper: RunContextWrapper[Any]
+    ) -> list[Handoff]:
         handoffs = []
         for handoff_item in agent.handoffs:
             if isinstance(handoff_item, Handoff):
                 handoffs.append(handoff_item)
             elif isinstance(handoff_item, Agent):
                 handoffs.append(handoff(handoff_item))
-        return handoffs
+
+        async def _check_handoff_enabled(handoff_obj: Handoff) -> bool:
+            attr = handoff_obj.is_enabled
+            if isinstance(attr, bool):
+                return attr
+            res = attr(context_wrapper, agent)
+            if inspect.isawaitable(res):
+                return bool(await res)
+            return bool(res)
+
+        results = await asyncio.gather(*(_check_handoff_enabled(h) for h in handoffs))
+        enabled: list[Handoff] = [h for h, ok in zip(handoffs, results) if ok]
+        return enabled
 
     @classmethod
     async def _get_all_tools(

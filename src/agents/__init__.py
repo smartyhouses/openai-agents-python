@@ -209,7 +209,6 @@ __all__ = [
     "ToolCallItem",
     "ToolCallOutputItem",
     "ReasoningItem",
-    "ModelResponse",
     "ItemHelpers",
     "RunHooks",
     "AgentHooks",

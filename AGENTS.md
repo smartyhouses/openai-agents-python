@@ -35,7 +35,7 @@ Welcome to the OpenAI Agents SDK repository. This file contains the main points 
 
    Coverage can be generated with `make coverage`.
 
-*Note*: Use `uv run ...` to execute arbitrary cli commands within the project's virtual environment.
+All python commands should be run via `uv run python ...`
 
 ## Snapshot tests
 
@@ -66,6 +66,6 @@ Commit messages should be concise and written in the imperative mood. Small, foc
 ## What reviewers look for
 
 - Tests covering new behaviour.
-- Consistent style: code formatted with `ruff format`, imports sorted, and type hints passing `mypy`.
+- Consistent style: code formatted with `uv run ruff format`, imports sorted, and type hints passing `uv run mypy .`.
 - Clear documentation for any public API changes.
 - Clean history and a helpful PR description.
