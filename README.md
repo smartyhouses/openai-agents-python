@@ -100,20 +100,20 @@ class MyCustomSession:
         self.session_id = session_id
         # Your initialization here
 
-    async def get_messages(self, limit: int | None = None) -> List[dict]:
+    async def get_items(self, limit: int | None = None) -> List[dict]:
         # Retrieve conversation history for the session
         pass
 
-    async def add_messages(self, messages: List[dict]) -> None:
-        # Store new messages for the session
+    async def add_items(self, items: List[dict]) -> None:
+        # Store new items for the session
         pass
 
-    async def pop_message(self) -> dict | None:
-        # Remove and return the most recent message from the session
+    async def pop_item(self) -> dict | None:
+        # Remove and return the most recent item from the session
         pass
 
     async def clear_session(self) -> None:
-        # Clear all messages for the session
+        # Clear all items for the session
         pass
 
 # Use your custom session

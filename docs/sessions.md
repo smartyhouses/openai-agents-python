@@ -47,8 +47,8 @@ print(result.final_output)  # "Approximately 39 million"
 
 When session memory is enabled:
 
-1. **Before each run**: The runner automatically retrieves the conversation history for the session and prepends it to the input messages.
-2. **After each run**: All new messages generated during the run (user input, assistant responses, tool calls, etc.) are automatically stored in the session.
+1. **Before each run**: The runner automatically retrieves the conversation history for the session and prepends it to the input items.
+2. **After each run**: All new items generated during the run (user input, assistant responses, tool calls, etc.) are automatically stored in the session.
 3. **Context preservation**: Each subsequent run with the same session includes the full conversation history, allowing the agent to maintain context.
 
 This eliminates the need to manually call `.to_input_list()` and manage conversation state between runs.
@@ -64,27 +64,27 @@ from agents import SQLiteSession
 
 session = SQLiteSession("user_123", "conversations.db")
 
-# Get all messages in a session
-messages = await session.get_messages()
+# Get all items in a session
+items = await session.get_items()
 
-# Add new messages to a session
-new_messages = [
+# Add new items to a session
+new_items = [
     {"role": "user", "content": "Hello"},
     {"role": "assistant", "content": "Hi there!"}
 ]
-await session.add_messages(new_messages)
+await session.add_items(new_items)
 
-# Remove and return the most recent message
-last_message = await session.pop_message()
-print(last_message)  # {"role": "assistant", "content": "Hi there!"}
+# Remove and return the most recent item
+last_item = await session.pop_item()
+print(last_item)  # {"role": "assistant", "content": "Hi there!"}
 
-# Clear all messages from a session
+# Clear all items from a session
 await session.clear_session()
 ```
 
-### Using pop_message for corrections
+### Using pop_item for corrections
 
-The `pop_message` method is particularly useful when you want to undo or modify the last message in a conversation:
+The `pop_item` method is particularly useful when you want to undo or modify the last item in a conversation:
 
 ```python
 from agents import Agent, Runner, SQLiteSession
@@ -101,8 +101,8 @@ result = await Runner.run(
 print(f"Agent: {result.final_output}")
 
 # User wants to correct their question
-user_message = await session.pop_message()  # Remove user's question
-assistant_message = await session.pop_message()  # Remove agent's response
+user_item = await session.pop_item()  # Remove user's question
+assistant_item = await session.pop_item()  # Remove agent's response
 
 # Ask a corrected question
 result = await Runner.run(
@@ -179,23 +179,23 @@ class MyCustomSession:
         self.session_id = session_id
         # Your initialization here
 
-    async def get_messages(self, limit: int | None = None) -> List[dict]:
+    async def get_items(self, limit: int | None = None) -> List[dict]:
         """Retrieve conversation history for this session."""
         # Your implementation here
         pass
 
-    async def add_messages(self, messages: List[dict]) -> None:
-        """Store new messages for this session."""
+    async def add_items(self, items: List[dict]) -> None:
+        """Store new items for this session."""
         # Your implementation here
         pass
 
-    async def pop_message(self) -> dict | None:
-        """Remove and return the most recent message from this session."""
+    async def pop_item(self) -> dict | None:
+        """Remove and return the most recent item from this session."""
         # Your implementation here
         pass
 
     async def clear_session(self) -> None:
-        """Clear all messages for this session."""
+        """Clear all items for this session."""
         # Your implementation here
         pass
 

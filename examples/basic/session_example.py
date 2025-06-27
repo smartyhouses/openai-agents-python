@@ -56,20 +56,20 @@ async def main():
     print("Notice how the agent remembered the context from previous turns!")
     print("Sessions automatically handles conversation history.")
 
-    # Demonstrate the limit parameter - get only the latest 2 messages
-    print("\n=== Latest Messages Demo ===")
-    latest_messages = await session.get_messages(limit=2)
-    print("Latest 2 messages:")
-    for i, msg in enumerate(latest_messages, 1):
+    # Demonstrate the limit parameter - get only the latest 2 items
+    print("\n=== Latest Items Demo ===")
+    latest_items = await session.get_items(limit=2)
+    print("Latest 2 items:")
+    for i, msg in enumerate(latest_items, 1):
         role = msg.get("role", "unknown")
         content = msg.get("content", "")
         print(f"  {i}. {role}: {content}")
 
-    print(f"\nFetched {len(latest_messages)} out of total conversation history.")
+    print(f"\nFetched {len(latest_items)} out of total conversation history.")
 
-    # Get all messages to show the difference
-    all_messages = await session.get_messages()
-    print(f"Total messages in session: {len(all_messages)}")
+    # Get all items to show the difference
+    all_items = await session.get_items()
+    print(f"Total items in session: {len(all_items)}")
 
 
 if __name__ == "__main__":

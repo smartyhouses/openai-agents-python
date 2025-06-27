@@ -22,36 +22,36 @@ class Session(Protocol):
 
     session_id: str
 
-    async def get_messages(self, limit: int | None = None) -> list[TResponseInputItem]:
+    async def get_items(self, limit: int | None = None) -> list[TResponseInputItem]:
         """Retrieve the conversation history for this session.
 
         Args:
-            limit: Maximum number of messages to retrieve. If None, retrieves all messages.
-                   When specified, returns the latest N messages in chronological order.
+            limit: Maximum number of items to retrieve. If None, retrieves all items.
+                   When specified, returns the latest N items in chronological order.
 
         Returns:
             List of input items representing the conversation history
         """
         ...
 
-    async def add_messages(self, messages: list[TResponseInputItem]) -> None:
-        """Add new messages to the conversation history.
+    async def add_items(self, items: list[TResponseInputItem]) -> None:
+        """Add new items to the conversation history.
 
         Args:
-            messages: List of input items to add to the history
+            items: List of input items to add to the history
         """
         ...
 
-    async def pop_message(self) -> TResponseInputItem | None:
-        """Remove and return the most recent message from the session.
+    async def pop_item(self) -> TResponseInputItem | None:
+        """Remove and return the most recent item from the session.
 
         Returns:
-            The most recent message if it exists, None if the session is empty
+            The most recent item if it exists, None if the session is empty
         """
         ...
 
     async def clear_session(self) -> None:
-        """Clear all messages for this session."""
+        """Clear all items for this session."""
         ...
 
 
@@ -68,12 +68,12 @@ class SessionABC(ABC):
     session_id: str
 
     @abstractmethod
-    async def get_messages(self, limit: int | None = None) -> list[TResponseInputItem]:
+    async def get_items(self, limit: int | None = None) -> list[TResponseInputItem]:
         """Retrieve the conversation history for this session.
 
         Args:
-            limit: Maximum number of messages to retrieve. If None, retrieves all messages.
-                   When specified, returns the latest N messages in chronological order.
+            limit: Maximum number of items to retrieve. If None, retrieves all items.
+                   When specified, returns the latest N items in chronological order.
 
         Returns:
             List of input items representing the conversation history
@@ -81,26 +81,26 @@ class SessionABC(ABC):
         ...
 
     @abstractmethod
-    async def add_messages(self, messages: list[TResponseInputItem]) -> None:
-        """Add new messages to the conversation history.
+    async def add_items(self, items: list[TResponseInputItem]) -> None:
+        """Add new items to the conversation history.
 
         Args:
-            messages: List of input items to add to the history
+            items: List of input items to add to the history
         """
         ...
 
     @abstractmethod
-    async def pop_message(self) -> TResponseInputItem | None:
-        """Remove and return the most recent message from the session.
+    async def pop_item(self) -> TResponseInputItem | None:
+        """Remove and return the most recent item from the session.
 
         Returns:
-            The most recent message if it exists, None if the session is empty
+            The most recent item if it exists, None if the session is empty
         """
         ...
 
     @abstractmethod
     async def clear_session(self) -> None:
-        """Clear all messages for this session."""
+        """Clear all items for this session."""
         ...
 
 
@@ -198,22 +198,22 @@ class SQLiteSession(SessionABC):
 
         conn.commit()
 
-    async def get_messages(self, limit: int | None = None) -> list[TResponseInputItem]:
+    async def get_items(self, limit: int | None = None) -> list[TResponseInputItem]:
         """Retrieve the conversation history for this session.
 
         Args:
-            limit: Maximum number of messages to retrieve. If None, retrieves all messages.
-                   When specified, returns the latest N messages in chronological order.
+            limit: Maximum number of items to retrieve. If None, retrieves all items.
+                   When specified, returns the latest N items in chronological order.
 
         Returns:
             List of input items representing the conversation history
         """
 
-        def _get_messages_sync():
+        def _get_items_sync():
             conn = self._get_connection()
             with self._lock if self._is_memory_db else threading.Lock():
                 if limit is None:
-                    # Fetch all messages in chronological order
+                    # Fetch all items in chronological order
                     cursor = conn.execute(
                         f"""
                         SELECT message_data FROM {self.messages_table} 
@@ -223,7 +223,7 @@ class SQLiteSession(SessionABC):
                         (self.session_id,),
                     )
                 else:
-                    # Fetch the latest N messages in chronological order
+                    # Fetch the latest N items in chronological order
                     # First get the total limit to calculate offset
                     count_cursor = conn.execute(
                         f"""
@@ -234,7 +234,7 @@ class SQLiteSession(SessionABC):
                     )
                     total_count = count_cursor.fetchone()[0]
 
-                    # Calculate offset to get the latest N messages
+                    # Calculate offset to get the latest N items
                     offset = max(0, total_count - limit)
 
                     cursor = conn.execute(
@@ -247,29 +247,29 @@ class SQLiteSession(SessionABC):
                         (self.session_id, limit, offset),
                     )
 
-                messages = []
+                items = []
                 for (message_data,) in cursor.fetchall():
                     try:
-                        message = json.loads(message_data)
-                        messages.append(message)
+                        item = json.loads(message_data)
+                        items.append(item)
                     except json.JSONDecodeError:
                         # Skip invalid JSON entries
                         continue
 
-                return messages
+                return items
 
-        return await asyncio.to_thread(_get_messages_sync)
+        return await asyncio.to_thread(_get_items_sync)
 
-    async def add_messages(self, messages: list[TResponseInputItem]) -> None:
-        """Add new messages to the conversation history.
+    async def add_items(self, items: list[TResponseInputItem]) -> None:
+        """Add new items to the conversation history.
 
         Args:
-            messages: List of input items to add to the history
+            items: List of input items to add to the history
         """
-        if not messages:
+        if not items:
             return
 
-        def _add_messages_sync():
+        def _add_items_sync():
             conn = self._get_connection()
 
             with self._lock if self._is_memory_db else threading.Lock():
@@ -281,9 +281,9 @@ class SQLiteSession(SessionABC):
                     (self.session_id,),
                 )
 
-                # Add messages
+                # Add items
                 message_data = [
-                    (self.session_id, json.dumps(message)) for message in messages
+                    (self.session_id, json.dumps(item)) for item in items
                 ]
                 conn.executemany(
                     f"""
@@ -302,16 +302,16 @@ class SQLiteSession(SessionABC):
 
                 conn.commit()
 
-        await asyncio.to_thread(_add_messages_sync)
+        await asyncio.to_thread(_add_items_sync)
 
-    async def pop_message(self) -> TResponseInputItem | None:
-        """Remove and return the most recent message from the session.
+    async def pop_item(self) -> TResponseInputItem | None:
+        """Remove and return the most recent item from the session.
 
         Returns:
-            The most recent message if it exists, None if the session is empty
+            The most recent item if it exists, None if the session is empty
         """
 
-        def _pop_message_sync():
+        def _pop_item_sync():
             conn = self._get_connection()
             with self._lock if self._is_memory_db else threading.Lock():
                 cursor = conn.execute(
@@ -328,8 +328,8 @@ class SQLiteSession(SessionABC):
                 if result:
                     message_id, message_data = result
                     try:
-                        message = json.loads(message_data)
-                        # Delete the message by ID
+                        item = json.loads(message_data)
+                        # Delete the item by ID
                         conn.execute(
                             f"""
                             DELETE FROM {self.messages_table} WHERE id = ?
@@ -337,7 +337,7 @@ class SQLiteSession(SessionABC):
                             (message_id,),
                         )
                         conn.commit()
-                        return message
+                        return item
                     except json.JSONDecodeError:
                         # Skip invalid JSON entries, but still delete the corrupted record
                         conn.execute(
@@ -351,10 +351,10 @@ class SQLiteSession(SessionABC):
 
                 return None
 
-        return await asyncio.to_thread(_pop_message_sync)
+        return await asyncio.to_thread(_pop_item_sync)
 
     async def clear_session(self) -> None:
-        """Clear all messages for this session."""
+        """Clear all items for this session."""
 
         def _clear_session_sync():
             conn = self._get_connection()

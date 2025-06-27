@@ -198,14 +198,14 @@ async def test_sqlite_session_memory_direct():
         session_id = "direct_test"
         session = SQLiteSession(session_id, db_path)
 
-        # Test adding and retrieving messages
-        messages = [
+        # Test adding and retrieving items
+        items = [
             {"role": "user", "content": "Hello"},
             {"role": "assistant", "content": "Hi there!"},
         ]
 
-        await session.add_messages(messages)
-        retrieved = await session.get_messages()
+        await session.add_items(items)
+        retrieved = await session.get_items()
 
         assert len(retrieved) == 2
         assert retrieved[0]["role"] == "user"
@@ -215,74 +215,74 @@ async def test_sqlite_session_memory_direct():
 
         # Test clearing session
         await session.clear_session()
-        retrieved_after_clear = await session.get_messages()
+        retrieved_after_clear = await session.get_items()
         assert len(retrieved_after_clear) == 0
 
         session.close()
 
 
 @pytest.mark.asyncio
-async def test_sqlite_session_memory_pop_message():
-    """Test SQLiteSession pop_message functionality."""
+async def test_sqlite_session_memory_pop_item():
+    """Test SQLiteSession pop_item functionality."""
     with tempfile.TemporaryDirectory() as temp_dir:
         db_path = Path(temp_dir) / "test_pop.db"
         session_id = "pop_test"
         session = SQLiteSession(session_id, db_path)
 
         # Test popping from empty session
-        popped = await session.pop_message()
+        popped = await session.pop_item()
         assert popped is None
 
-        # Add messages
-        messages = [
+        # Add items
+        items = [
             {"role": "user", "content": "Hello"},
             {"role": "assistant", "content": "Hi there!"},
             {"role": "user", "content": "How are you?"},
         ]
 
-        await session.add_messages(messages)
+        await session.add_items(items)
 
-        # Verify all messages are there
-        retrieved = await session.get_messages()
+        # Verify all items are there
+        retrieved = await session.get_items()
         assert len(retrieved) == 3
 
-        # Pop the most recent message
-        popped = await session.pop_message()
+        # Pop the most recent item
+        popped = await session.pop_item()
         assert popped is not None
         assert popped["role"] == "user"
         assert popped["content"] == "How are you?"
 
-        # Verify message was removed
-        retrieved_after_pop = await session.get_messages()
+        # Verify item was removed
+        retrieved_after_pop = await session.get_items()
         assert len(retrieved_after_pop) == 2
         assert retrieved_after_pop[-1]["content"] == "Hi there!"
 
-        # Pop another message
-        popped2 = await session.pop_message()
+        # Pop another item
+        popped2 = await session.pop_item()
         assert popped2 is not None
         assert popped2["role"] == "assistant"
         assert popped2["content"] == "Hi there!"
 
-        # Pop the last message
-        popped3 = await session.pop_message()
+        # Pop the last item
+        popped3 = await session.pop_item()
         assert popped3 is not None
         assert popped3["role"] == "user"
         assert popped3["content"] == "Hello"
 
         # Try to pop from empty session again
-        popped4 = await session.pop_message()
+        popped4 = await session.pop_item()
         assert popped4 is None
 
         # Verify session is empty
-        final_messages = await session.get_messages()
-        assert len(final_messages) == 0
+        final_items = await session.get_items()
+        assert len(final_items) == 0
 
         session.close()
 
 
 @pytest.mark.asyncio
 async def test_session_memory_pop_different_sessions():
-    """Test that pop_message only affects the specified session."""
+    """Test that pop_item only affects the specified session."""
     with tempfile.TemporaryDirectory() as temp_dir:
         db_path = Path(temp_dir) / "test_pop_sessions.db"
 
@@ -291,47 +291,47 @@ async def test_session_memory_pop_different_sessions():
         session_1 = SQLiteSession(session_1_id, db_path)
         session_2 = SQLiteSession(session_2_id, db_path)
 
-        # Add messages to both sessions
-        messages_1 = [
+        # Add items to both sessions
+        items_1 = [
             {"role": "user", "content": "Session 1 message"},
         ]
-        messages_2 = [
+        items_2 = [
             {"role": "user", "content": "Session 2 message 1"},
             {"role": "user", "content": "Session 2 message 2"},
         ]
 
-        await session_1.add_messages(messages_1)
-        await session_2.add_messages(messages_2)
+        await session_1.add_items(items_1)
+        await session_2.add_items(items_2)
 
         # Pop from session 2
-        popped = await session_2.pop_message()
+        popped = await session_2.pop_item()
         assert popped is not None
         assert popped["content"] == "Session 2 message 2"
 
         # Verify session 1 is unaffected
-        session_1_messages = await session_1.get_messages()
-        assert len(session_1_messages) == 1
-        assert session_1_messages[0]["content"] == "Session 1 message"
+        session_1_items = await session_1.get_items()
+        assert len(session_1_items) == 1
+        assert session_1_items[0]["content"] == "Session 1 message"
 
-        # Verify session 2 has one message left
-        session_2_messages = await session_2.get_messages()
-        assert len(session_2_messages) == 1
-        assert session_2_messages[0]["content"] == "Session 2 message 1"
+        # Verify session 2 has one item left
+        session_2_items = await session_2.get_items()
+        assert len(session_2_items) == 1
+        assert session_2_items[0]["content"] == "Session 2 message 1"
 
         session_1.close()
         session_2.close()
 
 
 @pytest.mark.asyncio
-async def test_sqlite_session_get_messages_with_count():
-    """Test SQLiteSession get_messages with count parameter."""
+async def test_sqlite_session_get_items_with_limit():
+    """Test SQLiteSession get_items with limit parameter."""
     with tempfile.TemporaryDirectory() as temp_dir:
         db_path = Path(temp_dir) / "test_count.db"
         session_id = "count_test"
         session = SQLiteSession(session_id, db_path)
 
-        # Add multiple messages
-        messages = [
+        # Add multiple items
+        items = [
             {"role": "user", "content": "Message 1"},
             {"role": "assistant", "content": "Response 1"},
             {"role": "user", "content": "Message 2"},
@@ -340,36 +340,36 @@ async def test_sqlite_session_get_messages_with_count():
             {"role": "assistant", "content": "Response 3"},
         ]
 
-        await session.add_messages(messages)
+        await session.add_items(items)
 
-        # Test getting all messages (default behavior)
-        all_messages = await session.get_messages()
-        assert len(all_messages) == 6
-        assert all_messages[0]["content"] == "Message 1"
-        assert all_messages[-1]["content"] == "Response 3"
+        # Test getting all items (default behavior)
+        all_items = await session.get_items()
+        assert len(all_items) == 6
+        assert all_items[0]["content"] == "Message 1"
+        assert all_items[-1]["content"] == "Response 3"
 
-        # Test getting latest 2 messages
-        latest_2 = await session.get_messages(limit=2)
+        # Test getting latest 2 items
+        latest_2 = await session.get_items(limit=2)
         assert len(latest_2) == 2
         assert latest_2[0]["content"] == "Message 3"
         assert latest_2[1]["content"] == "Response 3"
 
-        # Test getting latest 4 messages
-        latest_4 = await session.get_messages(limit=4)
+        # Test getting latest 4 items
+        latest_4 = await session.get_items(limit=4)
         assert len(latest_4) == 4
         assert latest_4[0]["content"] == "Message 2"
         assert latest_4[1]["content"] == "Response 2"
         assert latest_4[2]["content"] == "Message 3"
         assert latest_4[3]["content"] == "Response 3"
 
-        # Test getting more messages than available
-        latest_10 = await session.get_messages(limit=10)
-        assert len(latest_10) == 6  # Should return all available messages
+        # Test getting more items than available
+        latest_10 = await session.get_items(limit=10)
+        assert len(latest_10) == 6  # Should return all available items
         assert latest_10[0]["content"] == "Message 1"
         assert latest_10[-1]["content"] == "Response 3"
 
-        # Test getting 0 messages
-        latest_0 = await session.get_messages(limit=0)
+        # Test getting 0 items
+        latest_0 = await session.get_items(limit=0)
         assert len(latest_0) == 0
 
         session.close()

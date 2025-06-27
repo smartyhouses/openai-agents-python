@@ -1250,7 +1250,7 @@ class AgentRunner:
             )
 
         # Get previous conversation history
-        history = await session.get_messages()
+        history = await session.get_items()
 
         # Convert input to list format
         new_input_list = ItemHelpers.input_to_new_input_list(input)
@@ -1277,9 +1277,9 @@ class AgentRunner:
         # Convert new items to input format
         new_items_as_input = [item.to_input_item() for item in result.new_items]
 
-        # Save all messages from this turn
-        messages_to_save = input_list + new_items_as_input
-        await session.add_messages(messages_to_save)
+        # Save all items from this turn
+        items_to_save = input_list + new_items_as_input
+        await session.add_items(items_to_save)
 
 
 DEFAULT_AGENT_RUNNER = AgentRunner()
