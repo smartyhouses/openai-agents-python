@@ -329,7 +329,6 @@ class AgentRunner:
         self,
         starting_agent: Agent[TContext],
         input: str | list[TResponseInputItem],
-        *,
         session: Session | None = None,
         **kwargs: Unpack[RunOptions[TContext]],
     ) -> RunResult:
@@ -502,7 +501,6 @@ class AgentRunner:
         self,
         starting_agent: Agent[TContext],
         input: str | list[TResponseInputItem],
-        *,
         session: Session | None = None,
         **kwargs: Unpack[RunOptions[TContext]],
     ) -> RunResult:
@@ -528,7 +526,6 @@ class AgentRunner:
         self,
         starting_agent: Agent[TContext],
         input: str | list[TResponseInputItem],
-        *,
         session: Session | None = None,
         **kwargs: Unpack[RunOptions[TContext]],
     ) -> RunResultStreaming:
