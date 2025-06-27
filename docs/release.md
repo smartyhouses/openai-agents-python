@@ -1,4 +1,4 @@
-# Release process
+# Release process/changelog
 
 The project follows a slightly modified version of semantic versioning using the form `0.Y.Z`. The leading `0` indicates the SDK is still evolving rapidly. Increment the components as follows:
 
