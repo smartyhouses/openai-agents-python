@@ -334,7 +334,6 @@ class AgentRunner:
         previous_response_id: str | None = None,
         session: Session | None = None,
     ) -> RunResult:
-        # No need to get from kwargs anymore since they're explicit parameters
         if hooks is None:
             hooks = RunHooks[Any]()
         if run_config is None:
