@@ -10,7 +10,7 @@ from openai.types.responses import ResponseCompletedEvent
 from openai.types.responses.response_prompt_param import (
     ResponsePromptParam,
 )
-from typing_extensions import NotRequired, TypedDict
+from typing_extensions import NotRequired, TypedDict, Unpack
 
 from ._run_impl import (
     AgentToolUseTracker,
@@ -157,6 +157,9 @@ class RunOptions(TypedDict, Generic[TContext]):
 
     previous_response_id: NotRequired[str | None]
     """The ID of the previous response, if any."""
+
+    session: NotRequired[Session | None]
+    """The session for the run."""
 
 
 class Runner:
@@ -327,13 +330,14 @@ class AgentRunner:
         starting_agent: Agent[TContext],
         input: str | list[TResponseInputItem],
         *,
-        context: TContext | None = None,
-        max_turns: int = DEFAULT_MAX_TURNS,
-        hooks: RunHooks[TContext] | None = None,
-        run_config: RunConfig | None = None,
-        previous_response_id: str | None = None,
         session: Session | None = None,
+        **kwargs: Unpack[RunOptions[TContext]],
     ) -> RunResult:
+        context = kwargs.get("context")
+        max_turns = kwargs.get("max_turns", DEFAULT_MAX_TURNS)
+        hooks = kwargs.get("hooks")
+        run_config = kwargs.get("run_config")
+        previous_response_id = kwargs.get("previous_response_id")
         if hooks is None:
             hooks = RunHooks[Any]()
         if run_config is None:
@@ -499,23 +503,24 @@ class AgentRunner:
         starting_agent: Agent[TContext],
         input: str | list[TResponseInputItem],
         *,
-        context: TContext | None = None,
-        max_turns: int = DEFAULT_MAX_TURNS,
-        hooks: RunHooks[TContext] | None = None,
-        run_config: RunConfig | None = None,
-        previous_response_id: str | None = None,
         session: Session | None = None,
+        **kwargs: Unpack[RunOptions[TContext]],
     ) -> RunResult:
+        context = kwargs.get("context")
+        max_turns = kwargs.get("max_turns", DEFAULT_MAX_TURNS)
+        hooks = kwargs.get("hooks")
+        run_config = kwargs.get("run_config")
+        previous_response_id = kwargs.get("previous_response_id")
         return asyncio.get_event_loop().run_until_complete(
             self.run(
                 starting_agent,
                 input,
+                session=session,
                 context=context,
                 max_turns=max_turns,
                 hooks=hooks,
                 run_config=run_config,
                 previous_response_id=previous_response_id,
-                session=session,
             )
         )
 
@@ -524,13 +529,14 @@ class AgentRunner:
         starting_agent: Agent[TContext],
         input: str | list[TResponseInputItem],
         *,
-        context: TContext | None = None,
-        max_turns: int = DEFAULT_MAX_TURNS,
-        hooks: RunHooks[TContext] | None = None,
-        run_config: RunConfig | None = None,
-        previous_response_id: str | None = None,
         session: Session | None = None,
+        **kwargs: Unpack[RunOptions[TContext]],
     ) -> RunResultStreaming:
+        context = kwargs.get("context")
+        max_turns = kwargs.get("max_turns", DEFAULT_MAX_TURNS)
+        hooks = kwargs.get("hooks")
+        run_config = kwargs.get("run_config")
+        previous_response_id = kwargs.get("previous_response_id")
         if hooks is None:
             hooks = RunHooks[Any]()
         if run_config is None:
