@@ -647,23 +647,23 @@ class AgentRunner:
         previous_response_id: str | None,
         session: Session | None,
     ):
-        current_span: Span[AgentSpanData] | None = None
-        try:
-            if streamed_result.trace:
-                streamed_result.trace.start(mark_as_current=True)
+        if streamed_result.trace:
+            streamed_result.trace.start(mark_as_current=True)
 
+        current_agent = starting_agent
+        current_turn = 0
+        should_run_agent_start_hooks = True
+        tool_use_tracker = AgentToolUseTracker()
+        current_span: Span[AgentSpanData] | None = None
+
+        streamed_result._event_queue.put_nowait(AgentUpdatedStreamEvent(new_agent=current_agent))
+
+        try:
             # Prepare input with session if enabled
             prepared_input = await AgentRunner._prepare_input_with_session(starting_input, session)
             
             # Update the streamed result with the prepared input
             streamed_result.input = prepared_input
-
-            current_agent = starting_agent
-            current_turn = 0
-            should_run_agent_start_hooks = True
-            tool_use_tracker = AgentToolUseTracker()
-
-            streamed_result._event_queue.put_nowait(AgentUpdatedStreamEvent(new_agent=current_agent))
 
             while True:
                 if streamed_result.is_complete:
@@ -810,11 +810,6 @@ class AgentRunner:
                     raise
 
             streamed_result.is_complete = True
-        except Exception as e:
-            # Ensure we signal completion even if an exception occurs early
-            streamed_result.is_complete = True
-            streamed_result._event_queue.put_nowait(QueueCompleteSentinel())
-            raise
         finally:
             if current_span:
                 current_span.finish(reset_current=True)
