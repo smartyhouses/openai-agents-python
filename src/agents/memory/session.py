@@ -6,7 +6,7 @@ import sqlite3
 import threading
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from ..items import TResponseInputItem
@@ -124,7 +124,8 @@ class SQLiteSession(SessionABC):
         Args:
             session_id: Unique identifier for the conversation session
             db_path: Path to the SQLite database file. Defaults to ':memory:' (in-memory database)
-            sessions_table: Name of the table to store session metadata. Defaults to 'agent_sessions'
+            sessions_table: Name of the table to store session metadata. Defaults to
+                'agent_sessions'
             messages_table: Name of the table to store message data. Defaults to 'agent_messages'
         """
         self.session_id = session_id
@@ -184,14 +185,15 @@ class SQLiteSession(SessionABC):
                 session_id TEXT NOT NULL,
                 message_data TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (session_id) REFERENCES {self.sessions_table} (session_id) ON DELETE CASCADE
+                FOREIGN KEY (session_id) REFERENCES {self.sessions_table} (session_id)
+                    ON DELETE CASCADE
             )
         """
         )
 
         conn.execute(
             f"""
-            CREATE INDEX IF NOT EXISTS idx_{self.messages_table}_session_id 
+            CREATE INDEX IF NOT EXISTS idx_{self.messages_table}_session_id
             ON {self.messages_table} (session_id, created_at)
         """
         )
@@ -216,39 +218,32 @@ class SQLiteSession(SessionABC):
                     # Fetch all items in chronological order
                     cursor = conn.execute(
                         f"""
-                        SELECT message_data FROM {self.messages_table} 
-                        WHERE session_id = ? 
+                        SELECT message_data FROM {self.messages_table}
+                        WHERE session_id = ?
                         ORDER BY created_at ASC
                     """,
                         (self.session_id,),
                     )
                 else:
                     # Fetch the latest N items in chronological order
-                    # First get the total limit to calculate offset
-                    count_cursor = conn.execute(
-                        f"""
-                        SELECT COUNT(*) FROM {self.messages_table} 
-                        WHERE session_id = ?
-                    """,
-                        (self.session_id,),
-                    )
-                    total_count = count_cursor.fetchone()[0]
-
-                    # Calculate offset to get the latest N items
-                    offset = max(0, total_count - limit)
-
                     cursor = conn.execute(
                         f"""
-                        SELECT message_data FROM {self.messages_table} 
-                        WHERE session_id = ? 
-                        ORDER BY created_at ASC
-                        LIMIT ? OFFSET ?
-                    """,
-                        (self.session_id, limit, offset),
+                        SELECT message_data FROM {self.messages_table}
+                        WHERE session_id = ?
+                        ORDER BY created_at DESC
+                        LIMIT ?
+                        """,
+                        (self.session_id, limit),
                     )
 
+                rows = cursor.fetchall()
+
+                # Reverse to get chronological order when using DESC
+                if limit is not None:
+                    rows = list(reversed(rows))
+
                 items = []
-                for (message_data,) in cursor.fetchall():
+                for (message_data,) in rows:
                     try:
                         item = json.loads(message_data)
                         items.append(item)
@@ -295,7 +290,9 @@ class SQLiteSession(SessionABC):
                 # Update session timestamp
                 conn.execute(
                     f"""
-                    UPDATE {self.sessions_table} SET updated_at = CURRENT_TIMESTAMP WHERE session_id = ?
+                    UPDATE {self.sessions_table}
+                    SET updated_at = CURRENT_TIMESTAMP
+                    WHERE session_id = ?
                 """,
                     (self.session_id,),
                 )
@@ -316,8 +313,8 @@ class SQLiteSession(SessionABC):
             with self._lock if self._is_memory_db else threading.Lock():
                 cursor = conn.execute(
                     f"""
-                    SELECT id, message_data FROM {self.messages_table} 
-                    WHERE session_id = ? 
+                    SELECT id, message_data FROM {self.messages_table}
+                    WHERE session_id = ?
                     ORDER BY created_at DESC
                     LIMIT 1
                 """,
