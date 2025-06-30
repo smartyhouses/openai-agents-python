@@ -650,11 +650,11 @@ class AgentRunner:
         if streamed_result.trace:
             streamed_result.trace.start(mark_as_current=True)
 
+        current_span: Span[AgentSpanData] | None = None
         current_agent = starting_agent
         current_turn = 0
         should_run_agent_start_hooks = True
         tool_use_tracker = AgentToolUseTracker()
-        current_span: Span[AgentSpanData] | None = None
 
         streamed_result._event_queue.put_nowait(AgentUpdatedStreamEvent(new_agent=current_agent))
 
