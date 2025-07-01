@@ -311,39 +311,31 @@ class SQLiteSession(SessionABC):
         def _pop_item_sync():
             conn = self._get_connection()
             with self._lock if self._is_memory_db else threading.Lock():
+                # Use DELETE with RETURNING to atomically delete and return the most recent item
                 cursor = conn.execute(
                     f"""
-                    SELECT id, message_data FROM {self.messages_table}
-                    WHERE session_id = ?
-                    ORDER BY created_at DESC
-                    LIMIT 1
-                """,
+                    DELETE FROM {self.messages_table}
+                    WHERE id = (
+                        SELECT id FROM {self.messages_table}
+                        WHERE session_id = ?
+                        ORDER BY created_at DESC
+                        LIMIT 1
+                    )
+                    RETURNING message_data
+                    """,
                     (self.session_id,),
                 )
 
                 result = cursor.fetchone()
+                conn.commit()
+
                 if result:
-                    message_id, message_data = result
+                    message_data = result[0]
                     try:
                         item = json.loads(message_data)
-                        # Delete the item by ID
-                        conn.execute(
-                            f"""
-                            DELETE FROM {self.messages_table} WHERE id = ?
-                        """,
-                            (message_id,),
-                        )
-                        conn.commit()
                         return item
                     except json.JSONDecodeError:
-                        # Skip invalid JSON entries, but still delete the corrupted record
-                        conn.execute(
-                            f"""
-                            DELETE FROM {self.messages_table} WHERE id = ?
-                        """,
-                            (message_id,),
-                        )
-                        conn.commit()
+                        # Return None for corrupted JSON entries (already deleted)
                         return None
 
                 return None
