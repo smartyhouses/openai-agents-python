@@ -71,8 +71,10 @@ class RealtimeSessionConfig(TypedDict):
     tools: NotRequired[list[FunctionTool]]
 
 
-APIKeyOrKeyFunc = str | Callable[[], MaybeAwaitable[str]]
-"""Either an API key or a function that returns an API key."""
+# Using typing.Union for 3.9 compatibility
+APIKeyOrKeyFunc: TypeAlias = Union[str, Callable[[], MaybeAwaitable[str]]]
+"""Either an API key string or a zero-argument callable that returns one
+(sync or async)."""
 
 
 async def get_api_key(key: APIKeyOrKeyFunc | None) -> str | None:
