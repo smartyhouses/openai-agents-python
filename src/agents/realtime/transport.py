@@ -1,7 +1,5 @@
-from __future__ import annotations
-
 import abc
-from typing import Any, Literal, Union
+from typing import Any, Literal, Optional, Union
 
 from typing_extensions import NotRequired, TypeAlias, TypedDict
 
@@ -75,7 +73,7 @@ class RealtimeSessionTransport(abc.ABC):
 
     @abc.abstractmethod
     async def send_message(
-        self, message: RealtimeUserInput, other_event_data: dict[str, Any] | None = None
+        self, message: RealtimeUserInput, other_event_data: Optional[dict[str, Any]] = None
     ) -> None:
         """Send a message to the model."""
         pass
