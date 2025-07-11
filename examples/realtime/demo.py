@@ -5,11 +5,13 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from agents.realtime import RealtimeSession
+
 # Add the current directory to path so we can import ui
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from agents import function_tool
-from agents.realtime import RealtimeAgent, RealtimeSession, RealtimeSessionEvent
+from agents.realtime import RealtimeAgent, RealtimeRunner, RealtimeSessionEvent
 
 if TYPE_CHECKING:
     from .ui import AppUI
@@ -38,23 +40,34 @@ agent = RealtimeAgent(
 
 class Example:
     def __init__(self) -> None:
-        self.session = RealtimeSession(agent)
         self.ui = AppUI()
         self.ui.connected = asyncio.Event()
         self.ui.last_audio_item_id = None
         # Set the audio callback
         self.ui.set_audio_callback(self.on_audio_recorded)
 
+        self.session: RealtimeSession | None = None
+
     async def run(self) -> None:
-        self.session.add_listener(self.on_event)
-        await self.session.connect()
-        self.ui.set_is_connected(True)
-        await self.ui.run_async()
+        # Start UI in a separate task instead of waiting for it to complete
+        ui_task = asyncio.create_task(self.ui.run_async())
+
+        # Set up session immediately without waiting for UI to finish
+        runner = RealtimeRunner(agent)
+        async with await runner.run() as session:
+            self.session = session
+            self.ui.set_is_connected(True)
+            async for event in session:
+                await self.on_event(event)
+
+        # Wait for UI task to complete when session ends
+        await ui_task
 
     async def on_audio_recorded(self, audio_bytes: bytes) -> None:
         """Called when audio is recorded by the UI."""
         try:
             # Send the audio to the session
+            assert self.session is not None
             await self.session.send_audio(audio_bytes)
         except Exception as e:
             self.ui.log_message(f"Error sending audio: {e}")
