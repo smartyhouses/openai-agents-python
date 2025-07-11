@@ -10,11 +10,16 @@ from typing import Any, Callable, Literal
 from typing_extensions import TypeAlias, assert_never
 
 from ..handoffs import Handoff
-from ..run_context import RunContextWrapper
+from ..run_context import RunContextWrapper, TContext
 from ..tool import FunctionTool
 from ..tool_context import ToolContext
 from .agent import RealtimeAgent
-from .config import APIKeyOrKeyFunc, RealtimeSessionConfig, RealtimeUserInput
+from .config import (
+    RealtimeModelName,
+    RealtimeRunConfig,
+    RealtimeSessionModelSettings,
+    RealtimeUserInput,
+)
 from .events import (
     RealtimeAgentEndEvent,
     RealtimeAgentStartEvent,
@@ -32,18 +37,17 @@ from .events import (
     RealtimeToolStart,
 )
 from .items import InputAudio, InputText, RealtimeItem
+from .model import (
+    RealtimeModel,
+    RealtimeModelConfig,
+    RealtimeModelListener,
+)
+from .model_events import (
+    RealtimeModelEvent,
+    RealtimeModelInputAudioTranscriptionCompletedEvent,
+    RealtimeModelToolCallEvent,
+)
 from .openai_realtime import OpenAIRealtimeWebSocketTransport
-from .transport import (
-    RealtimeModelName,
-    RealtimeSessionTransport,
-    RealtimeTransportConnectionOptions,
-    RealtimeTransportListener,
-)
-from .transport_events import (
-    RealtimeTransportEvent,
-    RealtimeTransportInputAudioTranscriptionCompletedEvent,
-    RealtimeTransportToolCallEvent,
-)
 
 
 class RealtimeSessionListener(abc.ABC):
@@ -70,7 +74,7 @@ class _RealtimeFuncListener(RealtimeSessionListener):
         await self._func(event)
 
 
-class RealtimeSession(RealtimeTransportListener):
+class RealtimeSession(RealtimeModelListener):
     """A `RealtimeSession` is the equivalent of `Runner` for realtime agents. It automatically
     handles multiple turns by maintaining a persistent connection with the underlying transport
     layer.
@@ -86,14 +90,10 @@ class RealtimeSession(RealtimeTransportListener):
         self,
         starting_agent: RealtimeAgent,
         *,
-        context: Any | None = None,
-        transport: Literal["websocket"] | RealtimeSessionTransport = "websocket",
-        api_key: APIKeyOrKeyFunc | None = None,
+        context: TContext | None = None,
+        transport: Literal["websocket"] | RealtimeModel = "websocket",
         model: RealtimeModelName | None = None,
-        config: RealtimeSessionConfig | None = None,
-        # TODO (rm) Add guardrail support
-        # TODO (rm) Add tracing support
-        # TODO (rm) Add history audio storage config
+        config: RealtimeRunConfig | None = None,
     ) -> None:
         """Initialize the realtime session.
 
@@ -111,12 +111,11 @@ class RealtimeSession(RealtimeTransportListener):
         self._override_config = config
         self._history: list[RealtimeItem] = []
         self._model = model
-        self._api_key = api_key
 
         self._listeners: list[RealtimeSessionListener] = []
 
         if transport == "websocket":
-            self._transport: RealtimeSessionTransport = OpenAIRealtimeWebSocketTransport()
+            self._transport: RealtimeModel = OpenAIRealtimeWebSocketTransport()
         else:
             self._transport = transport
 
@@ -129,29 +128,21 @@ class RealtimeSession(RealtimeTransportListener):
         """Async context manager exit."""
         await self.end()
 
-    async def connect(self) -> None:
+    async def connect(self, *, model_config: RealtimeModelConfig | None = None) -> None:
         """Start the session: connect to the model and start the connection."""
         self._transport.add_listener(self)
 
-        config = await self.create_session_config(
-            overrides=self._override_config,
+        model_settings = await self._get_model_settings(
+            initial_settings=model_config.get("initial_model_settings") if model_config else None,
+            overrides=self._override_config.get("model_settings")
+            if self._override_config
+            else None,
         )
 
-        options: RealtimeTransportConnectionOptions = {
-            "initial_session_config": config,
-        }
+        model_config = model_config.copy() if model_config else {}
+        model_config["initial_model_settings"] = model_settings
 
-        if config.get("api_key") is not None:
-            options["api_key"] = config["api_key"]
-        elif self._api_key is not None:
-            options["api_key"] = self._api_key
-
-        if config.get("model") is not None:
-            options["model"] = config["model"]
-        elif self._model is not None:
-            options["model"] = self._model
-
-        await self._transport.connect(options)
+        await self._transport.connect(model_config)
 
         await self._emit_event(
             RealtimeHistoryUpdated(
@@ -183,28 +174,28 @@ class RealtimeSession(RealtimeTransportListener):
                     self._listeners.remove(x)
                     break
 
-    async def create_session_config(
-        self, overrides: RealtimeSessionConfig | None = None
-    ) -> RealtimeSessionConfig:
-        """Create the session config."""
+    async def _get_model_settings(
+        self,
+        initial_settings: RealtimeSessionModelSettings | None = None,
+        overrides: RealtimeSessionModelSettings | None = None,
+    ) -> RealtimeSessionModelSettings:
+        model_settings = initial_settings.copy() if initial_settings else {}
+
         agent = self._current_agent
         instructions, tools = await asyncio.gather(
             agent.get_system_prompt(self._context_wrapper),
             agent.get_all_tools(self._context_wrapper),
         )
-        config = RealtimeSessionConfig()
 
-        if self._model is not None:
-            config["model"] = self._model
         if instructions is not None:
-            config["instructions"] = instructions
+            model_settings["instructions"] = instructions
         if tools is not None:
-            config["tools"] = [tool for tool in tools if isinstance(tool, FunctionTool)]
+            model_settings["tools"] = tools
 
         if overrides:
-            config.update(overrides)
+            model_settings.update(overrides)
 
-        return config
+        return model_settings
 
     async def send_message(self, message: RealtimeUserInput) -> None:
         """Send a message to the model."""
@@ -218,7 +209,7 @@ class RealtimeSession(RealtimeTransportListener):
         """Interrupt the model."""
         await self._transport.interrupt()
 
-    async def on_event(self, event: RealtimeTransportEvent) -> None:
+    async def on_event(self, event: RealtimeModelEvent) -> None:
         """Called when an event is emitted by the realtime transport."""
         await self._emit_event(RealtimeRawTransportEvent(data=event, info=self._event_info))
 
@@ -284,7 +275,7 @@ class RealtimeSession(RealtimeTransportListener):
         """Emit an event to the listeners."""
         await asyncio.gather(*[listener.on_event(event) for listener in self._listeners])
 
-    async def _handle_tool_call(self, event: RealtimeTransportToolCallEvent) -> None:
+    async def _handle_tool_call(self, event: RealtimeModelToolCallEvent) -> None:
         all_tools = await self._current_agent.get_all_tools(self._context_wrapper)
         function_map = {tool.name: tool for tool in all_tools if isinstance(tool, FunctionTool)}
         handoff_map = {tool.name: tool for tool in all_tools if isinstance(tool, Handoff)}
@@ -322,10 +313,10 @@ class RealtimeSession(RealtimeTransportListener):
     def _get_new_history(
         self,
         old_history: list[RealtimeItem],
-        event: RealtimeTransportInputAudioTranscriptionCompletedEvent | RealtimeItem,
+        event: RealtimeModelInputAudioTranscriptionCompletedEvent | RealtimeItem,
     ) -> list[RealtimeItem]:
         # Merge transcript into placeholder input_audio message.
-        if isinstance(event, RealtimeTransportInputAudioTranscriptionCompletedEvent):
+        if isinstance(event, RealtimeModelInputAudioTranscriptionCompletedEvent):
             new_history: list[RealtimeItem] = []
             for item in old_history:
                 if item.item_id == event.item_id and item.type == "message" and item.role == "user":
