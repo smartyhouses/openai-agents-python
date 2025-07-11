@@ -3,7 +3,7 @@ import base64
 import json
 import os
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 import websockets
 from openai.types.beta.realtime.realtime_server_event import (
@@ -110,7 +110,7 @@ class OpenAIRealtimeWebSocketTransport(RealtimeSessionTransport):
         await self._websocket.send(json.dumps(converted_event))
 
     async def send_message(
-        self, message: RealtimeUserInput, other_event_data: dict[str, Any] | None = None
+        self, message: RealtimeUserInput, other_event_data: Optional[dict[str, Any]] = None
     ) -> None:
         """Send a message to the model."""
         message = (
