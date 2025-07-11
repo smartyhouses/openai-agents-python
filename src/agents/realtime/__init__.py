@@ -1,5 +1,16 @@
 from .agent import RealtimeAgent, RealtimeAgentHooks, RealtimeRunHooks
-from .config import APIKeyOrKeyFunc
+from .config import (
+    RealtimeAudioFormat,
+    RealtimeClientMessage,
+    RealtimeInputAudioTranscriptionConfig,
+    RealtimeModelName,
+    RealtimeRunConfig,
+    RealtimeSessionModelSettings,
+    RealtimeTurnDetectionConfig,
+    RealtimeUserInput,
+    RealtimeUserInputMessage,
+    RealtimeUserInputText,
+)
 from .events import (
     RealtimeAgentEndEvent,
     RealtimeAgentStartEvent,
@@ -15,13 +26,12 @@ from .events import (
     RealtimeToolEnd,
     RealtimeToolStart,
 )
-from .session import RealtimeSession
-from .transport import (
-    RealtimeModelName,
-    RealtimeSessionTransport,
-    RealtimeTransportConnectionOptions,
-    RealtimeTransportListener,
+from .model import (
+    RealtimeModel,
+    RealtimeModelConfig,
+    RealtimeModelListener,
 )
+from .session import RealtimeSession
 
 __all__ = [
     "RealtimeAgent",
@@ -30,11 +40,19 @@ __all__ = [
     "RealtimeSession",
     "RealtimeSessionListener",
     "RealtimeSessionListenerFunc",
-    "APIKeyOrKeyFunc",
+    "RealtimeRunConfig",
+    "RealtimeSessionModelSettings",
+    "RealtimeInputAudioTranscriptionConfig",
+    "RealtimeTurnDetectionConfig",
+    "RealtimeAudioFormat",
+    "RealtimeClientMessage",
+    "RealtimeUserInput",
+    "RealtimeUserInputMessage",
+    "RealtimeUserInputText",
     "RealtimeModelName",
-    "RealtimeSessionTransport",
-    "RealtimeTransportListener",
-    "RealtimeTransportConnectionOptions",
+    "RealtimeModel",
+    "RealtimeModelListener",
+    "RealtimeModelConfig",
     "RealtimeSessionEvent",
     "RealtimeAgentStartEvent",
     "RealtimeAgentEndEvent",
