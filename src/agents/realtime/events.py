@@ -7,7 +7,7 @@ from ..run_context import RunContextWrapper
 from ..tool import Tool
 from .agent import RealtimeAgent
 from .items import RealtimeItem
-from .transport_events import RealtimeTransportAudioEvent, RealtimeTransportEvent
+from .model_events import RealtimeModelAudioEvent, RealtimeModelEvent
 
 
 @dataclass
@@ -96,7 +96,7 @@ class RealtimeToolEnd:
 class RealtimeRawTransportEvent:
     """Forwards raw events from the transport layer."""
 
-    data: RealtimeTransportEvent
+    data: RealtimeModelEvent
     """The raw data from the transport layer."""
 
     info: RealtimeEventInfo
@@ -119,7 +119,7 @@ class RealtimeAudioEnd:
 class RealtimeAudio:
     """Triggered when the agent generates new audio to be played."""
 
-    audio: RealtimeTransportAudioEvent
+    audio: RealtimeModelAudioEvent
     """The audio event from the transport layer."""
 
     info: RealtimeEventInfo
