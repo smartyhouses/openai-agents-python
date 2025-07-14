@@ -269,9 +269,11 @@ class RealtimeSession(RealtimeModelListener):
             tool_context = ToolContext.from_agent_context(self._context_wrapper, event.call_id)
             result = await func_tool.on_invoke_tool(tool_context, event.arguments)
 
-            await self._model.send_event(RealtimeModelSendToolOutput(
-                tool_call=event, output=str(result), start_response=True
-            ))
+            await self._model.send_event(
+                RealtimeModelSendToolOutput(
+                    tool_call=event, output=str(result), start_response=True
+                )
+            )
 
             await self._put_event(
                 RealtimeToolEnd(
@@ -379,9 +381,11 @@ class RealtimeSession(RealtimeModelListener):
 
             # Send guardrail triggered message
             guardrail_names = [result.guardrail.get_name() for result in triggered_results]
-            await self._model.send_event(RealtimeModelSendUserInput(
-                user_input=f"guardrail triggered: {', '.join(guardrail_names)}"
-            ))
+            await self._model.send_event(
+                RealtimeModelSendUserInput(
+                    user_input=f"guardrail triggered: {', '.join(guardrail_names)}"
+                )
+            )
 
             return True
 
