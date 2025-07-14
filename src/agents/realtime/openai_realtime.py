@@ -58,6 +58,7 @@ from .model_inputs import (
     RealtimeModelSendEvent,
     RealtimeModelSendInterrupt,
     RealtimeModelSendRawMessage,
+    RealtimeModelSendSessionUpdate,
     RealtimeModelSendToolOutput,
     RealtimeModelSendUserInput,
 )
@@ -207,6 +208,8 @@ class OpenAIRealtimeWebSocketModel(RealtimeModel):
             await self._send_tool_output(event)
         elif isinstance(event, RealtimeModelSendInterrupt):
             await self._send_interrupt(event)
+        elif isinstance(event, RealtimeModelSendSessionUpdate):
+            await self._send_session_update(event)
         else:
             assert_never(event)
             raise ValueError(f"Unknown event type: {type(event)}")
@@ -321,6 +324,10 @@ class OpenAIRealtimeWebSocketModel(RealtimeModel):
         self._audio_start_time = None
         self._audio_length_ms = 0.0
         self._current_audio_content_index = None
+
+    async def _send_session_update(self, event: RealtimeModelSendSessionUpdate) -> None:
+        """Send a session update to the model."""
+        await self._update_session_config(event.session_settings)
 
     async def _handle_audio_delta(self, parsed: ResponseAudioDeltaEvent) -> None:
         """Handle audio delta events and update audio tracking state."""
