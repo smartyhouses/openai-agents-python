@@ -276,6 +276,7 @@ class OpenAIRealtimeWebSocketModel(RealtimeModel):
         tool_item = RealtimeToolCallItem(
             item_id=event.tool_call.id or "",
             previous_item_id=event.tool_call.previous_item_id,
+            call_id=event.tool_call.call_id,
             type="function_call",
             status="completed",
             arguments=event.tool_call.arguments,
@@ -337,6 +338,7 @@ class OpenAIRealtimeWebSocketModel(RealtimeModel):
             tool_call = RealtimeToolCallItem(
                 item_id=item.id or "",
                 previous_item_id=None,
+                call_id=item.call_id,
                 type="function_call",
                 # We use the same item for tool call and output, so it will be completed by the
                 # output being added
