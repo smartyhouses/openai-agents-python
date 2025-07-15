@@ -348,7 +348,7 @@ class OpenAIRealtimeWebSocketModel(RealtimeModel):
             await self._emit_event(RealtimeModelItemUpdatedEvent(item=tool_call))
             await self._emit_event(
                 RealtimeModelToolCallEvent(
-                    call_id=item.id or "",
+                    call_id=item.call_id or "",
                     name=item.name or "",
                     arguments=item.arguments or "",
                     id=item.id or "",
