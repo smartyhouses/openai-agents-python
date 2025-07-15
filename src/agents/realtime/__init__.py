@@ -30,14 +30,7 @@ from .events import (
     RealtimeToolEnd,
     RealtimeToolStart,
 )
-from .model import (
-    RealtimeModel,
-    RealtimeModelConfig,
-    RealtimeModelListener,
-)
-from .runner import RealtimeRunner
 from .items import (
-    AssistantAudio,
     AssistantMessageItem,
     AssistantText,
     InputAudio,
@@ -48,6 +41,11 @@ from .items import (
     RealtimeToolCallItem,
     SystemMessageItem,
     UserMessageItem,
+)
+from .model import (
+    RealtimeModel,
+    RealtimeModelConfig,
+    RealtimeModelListener,
 )
 from .model_events import (
     RealtimeConnectionStatus,
@@ -85,6 +83,7 @@ from .openai_realtime import (
     OpenAIRealtimeWebSocketModel,
     get_api_key,
 )
+from .runner import RealtimeRunner
 from .session import RealtimeSession
 
 __all__ = [
@@ -123,7 +122,6 @@ __all__ = [
     "RealtimeToolEnd",
     "RealtimeToolStart",
     # Items
-    "AssistantAudio",
     "AssistantMessageItem",
     "AssistantText",
     "InputAudio",
