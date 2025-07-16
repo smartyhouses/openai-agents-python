@@ -106,6 +106,66 @@ class NoUIDemo:
                     self.current_audio_chunk = None
                     self.chunk_position = 0
 
+        # Audio output state for callback system
+        self.output_queue: queue.Queue[np.ndarray] = queue.Queue(maxsize=10)  # Buffer more chunks
+        self.interrupt_event = threading.Event()
+        self.current_audio_chunk: np.ndarray | None = None
+        self.chunk_position = 0
+
+    def _output_callback(self, outdata: np.ndarray, frames: int, time, status) -> None:
+        """Callback for audio output - handles continuous audio stream from server."""
+        if status:
+            print(f"Output callback status: {status}")
+
+        # Check if we should clear the queue due to interrupt
+        if self.interrupt_event.is_set():
+            # Clear the queue and current chunk state
+            while not self.output_queue.empty():
+                try:
+                    self.output_queue.get_nowait()
+                except queue.Empty:
+                    break
+            self.current_audio_chunk = None
+            self.chunk_position = 0
+            self.interrupt_event.clear()
+            outdata.fill(0)
+            return
+
+        # Fill output buffer from queue and current chunk
+        outdata.fill(0)  # Start with silence
+        samples_filled = 0
+
+        while samples_filled < len(outdata):
+            # If we don't have a current chunk, try to get one from queue
+            if self.current_audio_chunk is None:
+                try:
+                    self.current_audio_chunk = self.output_queue.get_nowait()
+                    self.chunk_position = 0
+                except queue.Empty:
+                    # No more audio data available - this causes choppiness
+                    # Uncomment next line to debug underruns:
+                    # print(f"Audio underrun: {samples_filled}/{len(outdata)} samples filled")
+                    break
+
+            # Copy data from current chunk to output buffer
+            remaining_output = len(outdata) - samples_filled
+            remaining_chunk = len(self.current_audio_chunk) - self.chunk_position
+            samples_to_copy = min(remaining_output, remaining_chunk)
+
+            if samples_to_copy > 0:
+                chunk_data = self.current_audio_chunk[
+                    self.chunk_position : self.chunk_position + samples_to_copy
+                ]
+                # More efficient: direct assignment for mono audio instead of reshape
+                outdata[samples_filled : samples_filled + samples_to_copy, 0] = chunk_data
+                samples_filled += samples_to_copy
+                self.chunk_position += samples_to_copy
+
+                # If we've used up the entire chunk, reset for next iteration
+                if self.chunk_position >= len(self.current_audio_chunk):
+                    self.current_audio_chunk = None
+                    self.chunk_position = 0
+
     async def run(self) -> None:
         print("Connecting, may take a few seconds...")
 
