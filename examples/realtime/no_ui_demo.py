@@ -150,7 +150,8 @@ class NoUIDemo:
                 np_audio = np.frombuffer(event.audio.data, dtype=np.int16)
                 if self.audio_player:
                     try:
-                        self.audio_player.write(np_audio)
+                        # Push audio to separate thread so that it doesn't block the event loop
+                        await asyncio.to_thread(self.audio_player.write, np_audio)
                     except Exception as e:
                         print(f"Audio playback error: {e}")
             elif event.type == "audio_interrupted":
