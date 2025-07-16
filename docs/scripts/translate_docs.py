@@ -30,8 +30,7 @@ languages = {
 }
 
 # Initialize OpenAI client
-api_key = os.getenv("PROD_OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
-openai_client = OpenAI(api_key=api_key)
+openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # Define dictionaries for translation control
 do_not_translate = [
