@@ -364,7 +364,7 @@ class OpenAIRealtimeWebSocketModel(RealtimeModel):
                     "item_id": item.id or "",
                     "type": item.type,
                     "role": item.role,
-                    "content": item.content,
+                    "content": [content.model_dump() for content in item.content],
                     "status": "in_progress",
                 }
             )
