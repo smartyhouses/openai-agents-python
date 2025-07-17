@@ -220,35 +220,30 @@ class TestRealtimeTracingIntegration:
     async def test_tracing_disabled_prevents_tracing(self, mock_websocket):
         """Test that tracing_disabled=True prevents tracing configuration."""
         from agents.realtime.agent import RealtimeAgent
-        from agents.realtime.runner import RealtimeRunner
+        from agents.realtime.session import RealtimeSession
+        from agents.realtime.model import RealtimeModel
+        from unittest.mock import Mock
 
-        # Create a test agent and runner with tracing disabled
+        # Create a test agent and mock model
         agent = RealtimeAgent(name="test_agent", instructions="test")
+        agent.get_system_prompt = AsyncMock(return_value="test instructions")
+        agent.get_all_tools = AsyncMock(return_value=[])
+        agent.handoffs = []
 
-        runner = RealtimeRunner(starting_agent=agent, config={"tracing_disabled": True})
-
-        # Test the _get_model_settings method directly since that's where the logic is
-        model_settings = await runner._get_model_settings(
+        mock_model = Mock(spec=RealtimeModel)
+        
+        # Create session with tracing disabled
+        run_config = {"tracing_disabled": True}
+        session = RealtimeSession(
+            model=mock_model,
             agent=agent,
-            disable_tracing=True,  # This should come from config["tracing_disabled"]
-            initial_settings=None,
-            overrides=None,
+            context=None,
+            model_config=None,
+            run_config=run_config,
         )
+
+        # Test the _get_updated_model_settings_from_agent method directly
+        model_settings = await session._get_updated_model_settings_from_agent(agent)
 
         # When tracing is disabled, model settings should have tracing=None
         assert model_settings["tracing"] is None
-
-        # Also test that the runner passes disable_tracing=True correctly
-        with patch.object(runner, "_get_model_settings") as mock_get_settings:
-            mock_get_settings.return_value = {"tracing": None}
-
-            with patch("agents.realtime.session.RealtimeSession") as mock_session_class:
-                mock_session = AsyncMock()
-                mock_session_class.return_value = mock_session
-
-                await runner.run()
-
-                # Verify that _get_model_settings was called with disable_tracing=True
-                mock_get_settings.assert_called_once_with(
-                    agent=agent, disable_tracing=True, initial_settings=None, overrides=None
-                )
