@@ -4,16 +4,16 @@ search:
 ---
 # エージェント
 
-エージェントは、アプリにおける中核の構成要素です。エージェントとは、 instructions と tools で設定された大規模言語モデル（ LLM ）です。
+エージェントはアプリの中核となる構成要素です。エージェントとは、 instructions と tools で構成された大規模言語モデル ( LLM ) です。
 
 ## 基本設定
 
-エージェントで最もよく設定するプロパティは次のとおりです。
+エージェントで最もよく設定するプロパティは以下のとおりです。
 
--   `name`: エージェントを識別する必須の文字列。
--   `instructions`: 開発者メッセージまたは system prompt とも呼ばれます。
--   `model`: 使用する LLM と、 temperature や top_p などのモデル調整パラメーターを指定する省略可能な `model_settings`。
--   `tools`: エージェントがタスクを遂行するために利用できるツールの一覧。
+- `name`: エージェントを識別する必須の文字列です。  
+- `instructions`: developer メッセージまたは システムプロンプト とも呼ばれます。  
+- `model`: 使用する LLM を指定し、`model_settings` で temperature、top_p などのチューニングパラメーターを任意で設定できます。  
+- `tools`: エージェントがタスクを達成するために使用できる tools です。  
 
 ```python
 from agents import Agent, ModelSettings, function_tool
@@ -32,7 +32,7 @@ agent = Agent(
 
 ## コンテキスト
 
-エージェントは汎用的に `context` 型を取ります。コンテキストは依存性インジェクション用ツールであり、あなたが作成して `Runner.run()` に渡すオブジェクトです。このオブジェクトはすべてのエージェント、ツール、ハンドオフなどに渡され、エージェント実行時の依存関係や状態をまとめて保持します。任意の Python オブジェクトをコンテキストとして渡せます。
+エージェントは `context` 型についてジェネリックになっています。コンテキストは依存性注入のためのツールで、あなたが生成して `Runner.run()` に渡すオブジェクトです。このオブジェクトは各エージェント、 tool、ハンドオフなどに渡され、実行時の依存関係や状態を保持する入れ物として機能します。任意の Python オブジェクトをコンテキストとして提供できます。
 
 ```python
 @dataclass
@@ -50,7 +50,7 @@ agent = Agent[UserContext](
 
 ## 出力タイプ
 
-既定では、エージェントはプレーンテキスト（つまり `str` ）を出力します。エージェントに特定の型の出力を生成させたい場合は、 `output_type` パラメーターを使用します。よく使われるのは [Pydantic](https://docs.pydantic.dev/) オブジェクトですが、Pydantic の [TypeAdapter](https://docs.pydantic.dev/latest/api/type_adapter/) でラップ可能な型 ― dataclass、リスト、TypedDict など ― であれば何でもサポートしています。
+デフォルトでは、エージェントはプレーンテキスト (つまり `str`) を出力します。特定の型で出力させたい場合は `output_type` パラメーターを使用してください。一般的には [Pydantic](https://docs.pydantic.dev/) オブジェクトを使いますが、Pydantic の [TypeAdapter](https://docs.pydantic.dev/latest/api/type_adapter/) でラップできる型 ― dataclass、リスト、TypedDict など ― であればすべてサポートしています。
 
 ```python
 from pydantic import BaseModel
@@ -75,7 +75,7 @@ agent = Agent(
 
 ## ハンドオフ
 
-ハンドオフは、エージェントが委任できるサブエージェントです。ハンドオフのリストを渡すと、関連性がある場合にエージェントがそれらへ委任できます。これは、単一タスクに特化したモジュール型エージェントをオーケストレーションする強力なパターンです。詳細は [ハンドオフ](handoffs.md) ドキュメントをご覧ください。
+ハンドオフは、エージェントが委任できるサブエージェントです。ハンドオフのリストを提供しておくと、エージェントは必要に応じてそれらに処理を委任できます。これは、単一タスクに特化したモジュール化されたエージェントをオーケストレーションする強力なパターンです。詳細は [handoffs](handoffs.md) ドキュメントを参照してください。
 
 ```python
 from agents import Agent
@@ -96,7 +96,7 @@ triage_agent = Agent(
 
 ## 動的 instructions
 
-多くの場合、エージェント作成時に instructions を指定できますが、関数を介して動的に渡すことも可能です。その関数はエージェントとコンテキストを受け取り、プロンプトを返す必要があります。通常の関数も `async` 関数も使用できます。
+多くの場合、エージェント作成時に instructions を指定できますが、関数を通じて動的に instructions を提供することも可能です。この関数はエージェントとコンテキストを受け取り、プロンプトを返す必要があります。同期関数でも `async` 関数でも構いません。
 
 ```python
 def dynamic_instructions(
@@ -111,15 +111,15 @@ agent = Agent[UserContext](
 )
 ```
 
-## ライフサイクルイベント（フック）
+## ライフサイクルイベント (hooks)
 
-エージェントのライフサイクルを監視したい場合があります。たとえば、イベントをログに記録したり、特定のイベント発生時にデータを事前取得したりしたい場合です。 `hooks` プロパティを使ってエージェントのライフサイクルにフックできます。 [`AgentHooks`][agents.lifecycle.AgentHooks] クラスを継承し、関心のあるメソッドをオーバーライドしてください。
+エージェントのライフサイクルを監視したいケースがあります。たとえば、イベントをログに記録したり、特定のイベント発生時にデータを事前取得したりする場合です。`hooks` プロパティを使ってエージェントのライフサイクルにフックできます。[`AgentHooks`][agents.lifecycle.AgentHooks] クラスを継承し、関心のあるメソッドをオーバーライドしてください。
 
 ## ガードレール
 
-ガードレールを使用すると、エージェントの実行と並行してユーザー入力のチェックやバリデーションを行えます。たとえば、ユーザー入力の関連性をスクリーニングすることが可能です。詳細は [guardrails](guardrails.md) ドキュメントをご覧ください。
+ガードレールを使用すると、エージェントの実行と並行してユーザー入力に対するチェックやバリデーションを行えます。たとえば、ユーザー入力の関連性をスクリーニングすることが可能です。詳細は [guardrails](guardrails.md) ドキュメントを参照してください。
 
-## エージェントのクローン／コピー
+## エージェントの複製 / コピー
 
 エージェントの `clone()` メソッドを使用すると、エージェントを複製し、任意のプロパティを変更できます。
 
@@ -136,17 +136,17 @@ robot_agent = pirate_agent.clone(
 )
 ```
 
-## ツール使用の強制
+## Tool 使用の強制
 
-ツールのリストを渡しても、必ずしも LLM がツールを使用するとは限りません。 [`ModelSettings.tool_choice`][agents.model_settings.ModelSettings.tool_choice] を設定することでツール使用を強制できます。有効な値は以下のとおりです。
+tool のリストを指定しても、 LLM が必ずしも tool を使用するとは限りません。[`ModelSettings.tool_choice`][agents.model_settings.ModelSettings.tool_choice] を設定することで、 tool 使用を強制できます。有効な値は次のとおりです。
 
-1. `auto` : LLM がツールを使用するかどうかを判断します。
-2. `required` : LLM にツール使用を必須にします（ただし使用するツールは自動選択）。
-3. `none` : LLM にツールを使用しないことを必須にします。
-4. 文字列（例 `my_tool` ）を指定すると、その特定のツールを必ず使用させます。
+1. `auto` : LLM が tool を使うかどうかを判断します。  
+2. `required` : LLM に tool の使用を必須とします (ただしどの tool を使うかは自動で判断します)。  
+3. `none` : LLM に tool を使用しないことを必須とします。  
+4. 文字列 (`my_tool` など) を指定すると、その特定の tool を使用することを必須とします。  
 
 !!! note
 
-    無限ループを防ぐため、フレームワークはツール呼び出し後に `tool_choice` を自動的に "auto" にリセットします。この挙動は [`agent.reset_tool_choice`][agents.agent.Agent.reset_tool_choice] で設定できます。無限ループは、ツール結果が再度 LLM に送られ、 `tool_choice` により再びツール呼び出しが生成される、という繰り返しが原因です。
+    無限ループを防ぐため、フレームワークは tool 呼び出し後に `tool_choice` を自動的に "auto" にリセットします。この挙動は [`agent.reset_tool_choice`][agents.agent.Agent.reset_tool_choice] で設定できます。無限ループは、tool の結果が LLM に送信され、`tool_choice` の設定により LLM が再度 tool 呼び出しを生成し続けることで発生します。
 
-    ツール呼び出し後にエージェントを完全に停止させたい場合（自動モードを続行しない）、 [`Agent.tool_use_behavior="stop_on_first_tool"`] を設定できます。この場合、ツールの出力をそのまま最終応答として使用し、追加の LLM 処理は行いません。
+    tool 呼び出し後に自動モードへ戻さず、完全に停止させたい場合は [`Agent.tool_use_behavior="stop_on_first_tool"`] を設定してください。この設定では、最初の tool 出力をそのまま最終応答として使用し、追加の LLM 処理を行いません。
